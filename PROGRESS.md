@@ -10,9 +10,9 @@
 - [x] Create initial PROGRESS.md and commit
 
 ## Phase 1 — Reference Analysis
-- [ ] Study `reference/olake`: CLI protocol (spec/check/discover/sync/clear-destination), config JSON, state file, log format → `docs/analysis/olake-engine.md`
-- [ ] Study `reference/olake-ui`: API surface, job/source/dest models, Temporal usage, docker-compose → `docs/analysis/olake-ui.md`
-- [ ] [BRAINSTORM] Integration strategy (log tailing vs state polling vs UI API polling vs sync wrapping) — record in Decisions Log
+- [x] Study `reference/olake` → `docs/analysis/olake-engine.md` — key finds: stats.json rewritten every 2s during sync (rows/sec!), console-format zerolog lines (not JSON), `Total records read: N` line, state.json structure, no events/webhooks in engine
+- [x] Study `reference/olake-ui` → `docs/analysis/olake-ui.md` — key finds: REST API on :8000, `/jobs/:jobid/tasks` = per-run history `{file_path,start_time,runtime,status}`, log fetch API, Temporal orchestration, alerting = ONE `webhook_alert_url` field (positioning confirmed)
+- [x] [BRAINSTORM] Integration strategy → **Winner: OLake UI API polling** (see Decisions Log)
 
 ## Phase 2 — Product Spec
 - [ ] Write `docs/SPEC.md`: all MVP features (event collector, rule engine, multi-channel delivery, ML anomaly [BRAINSTORM model], LLM enrichment, correlation [BRAINSTORM clustering], dashboard) + secondary features 8–13, each with user story / acceptance criteria / MVP-vs-v2 label
@@ -69,7 +69,13 @@
 
 - **2026-07-19 — Project root layout:** Working dir is already `LakeSense/`; building the prescribed structure directly at repo root instead of a nested `lakesense/` subfolder. (No brainstorm needed — mechanical adaptation.)
 
+- **2026-07-19 — [BRAINSTORM] Integration strategy** (speed / demo / reliability / AI-showcase, 1–10):
+  - **A. OLake UI API polling** — poll `/jobs` + `/jobs/:jobid/tasks` on interval, diff task states into events, pull `/tasks/:taskid/logs` on failure for LLM enrichment. 8/7/8/7 = **30** ✅
+  - B. Filesystem tailing of `/tmp/olake-config` (stats.json every 2s, olake.log, state.json) — richest metrics but requires co-mounted volume, hashed workflow dirs, ANSI log parsing. 6/8/5/7 = 26
+  - C. Sync wrapper/sidecar — LakeSense invokes the OLake CLI itself, owns lifecycle. Reimplements orchestration; couples us to engine internals. 4/6/6/6 = 22
+  - **Choice: A**, with two cheap add-ons kept in design (not MVP-blocking): accept OLake's own `webhook_alert_url` pointed at a LakeSense ingest endpoint (instant failure ping), and an optional stats.json volume reader as a v2 metrics booster. Collector is interface-driven so B can be added without touching the event pipeline. Demo mode (Phase 4.1 seed script) makes everything demoable with no OLake install at all.
+
 ---
 
 ## Next Action
-Phase 1: read `reference/olake` (start with README.md, then connector CLI entrypoints and state/config handling) and write `docs/analysis/olake-engine.md`.
+Phase 2: write `docs/SPEC.md` (feature set with user stories, acceptance criteria, MVP/v2 labels; includes ML-model and correlation-clustering brainstorms), then commit.
