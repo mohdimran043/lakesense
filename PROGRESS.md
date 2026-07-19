@@ -12,14 +12,14 @@
 
 ## Phase 1 — Reference Analysis (clean-room bridge)
 > These docs are the ONLY channel reference→LakeSense. Own words, concepts only, never code listings.
-- [ ] docs/analysis/engine-protocol.md — connector lifecycle, config/state JSON shapes, stream selection
-- [ ] docs/analysis/postgres-connector.md — chunking (CTID/keyset), pgoutput CDC, resume, type mapping
-- [ ] docs/analysis/mysql-connector.md — binlog CDC, snapshot+position coordination, gotchas
-- [ ] docs/analysis/other-sources.md — MongoDB, MSSQL, Oracle, S3 file ingestion (concept level)
-- [ ] docs/analysis/writers.md — Parquet, Iceberg commit flow, Java layer rationale, pure-Go alternatives
-- [ ] docs/analysis/state-and-recovery.md — resumable syncs, exactly-once-ish delivery
-- [ ] docs/analysis/control-plane.md — job/source/destination models, orchestration
-- [ ] [BRAINSTORM] Iceberg write strategy for pure Go (iceberg-go vs REST-catalog commits vs Parquet-only v0.1)
+- [x] docs/analysis/engine-protocol.md — connector lifecycle, config/state JSON shapes, stream selection
+- [x] docs/analysis/postgres-connector.md — chunking (CTID/keyset), pgoutput CDC, resume, type mapping
+- [x] docs/analysis/mysql-connector.md — binlog CDC, snapshot+position coordination, gotchas
+- [ ] docs/analysis/other-sources.md — MongoDB, MSSQL, Oracle, S3 file ingestion (concept level) — recon subagent in flight
+- [x] docs/analysis/writers.md — Parquet, Iceberg commit flow, Java layer rationale, pure-Go alternatives
+- [x] docs/analysis/state-and-recovery.md — resumable syncs, exactly-once-ish delivery
+- [x] docs/analysis/control-plane.md — job/source/destination models, orchestration
+- [x] [BRAINSTORM] Iceberg write strategy → DECIDED: Option C (see Decisions Log)
 - [ ] Close reference/ for engine build (re-open only via analysis-doc updates)
 
 ## Phase 2 — LakeSense Engine
@@ -121,10 +121,12 @@
 - [ ] Tag v0.1.0
 
 ## Subagent Dispatch Log
-_(none in flight)_
+- 2026-07-19: 5 read-only recon agents over reference/ (postgres, mysql, other-sources, writers, olake-ui). 4 returned + distilled into analysis docs by main agent. IN FLIGHT: other-sources recon → feeds docs/analysis/other-sources.md.
 
 ## Decisions Log
 - **2026-07-19 — v2 reset:** Working tree found with v1 artifacts deleted and `lakesense-final-prompt.md` (v2) added by the founder. Treated as intentional restart; committed as checkpoint `8ad0481`. v1 docs recoverable via git history but superseded — v2 phase structure governs.
+- **2026-07-19 — [BRAINSTORM] Iceberg strategy (Phase 1):** (A) iceberg-go full integration 21 pts; (B) Parquet-only v0.1 26 pts; (C) Parquet + pure-Go append-mode Iceberg via REST catalog 31 pts. **Chose C**: default Parquet writer with our 2PC commit-marker fix; Iceberg append commits via REST catalog (Lakekeeper/Polaris class) in pure Go, no JVM; CDC-upsert Iceberg (equality deletes) honestly roadmapped v0.2; Iceberg failures degrade to Parquet + event. Full scoring table in docs/analysis/writers.md §4.
+- **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 
 ## Next Action
-Phase 1: read `reference/olake` protocol/ + connector.go + types/, write `docs/analysis/engine-protocol.md`.
+Finish docs/analysis/other-sources.md from in-flight recon report; then close reference/ for the engine build and start Phase 2.1 (lsengine skeleton + event schema).
