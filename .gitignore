@@ -1,4 +1,4 @@
-# Reference repos (upstream clones, read-only, never committed)
+# Reference repos (upstream clones, READ-ONLY, dev-time only, never committed)
 reference/
 
 # Secrets
@@ -6,25 +6,28 @@ reference/
 *.env
 !.env.example
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Go
+bin/
+*.test
+*.out
+coverage.*
 
 # Node
 node_modules/
 dist/
 .vite/
+docs-site/build/
+docs-site/.docusaurus/
 
-# Model artifacts
-ml/artifacts/
-*.joblib
-*.pkl
+# Local data / scratch
+data/
+*.parquet
+*.db
+*.sqlite
+
+# Claude local settings (machine-specific)
+.claude/settings.local.json
+.claude/settings.local.json.tmp.*
 
 # OS / editor
 .DS_Store
