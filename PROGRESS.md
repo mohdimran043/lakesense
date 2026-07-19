@@ -15,12 +15,12 @@
 - [x] docs/analysis/engine-protocol.md — connector lifecycle, config/state JSON shapes, stream selection
 - [x] docs/analysis/postgres-connector.md — chunking (CTID/keyset), pgoutput CDC, resume, type mapping
 - [x] docs/analysis/mysql-connector.md — binlog CDC, snapshot+position coordination, gotchas
-- [ ] docs/analysis/other-sources.md — MongoDB, MSSQL, Oracle, S3 file ingestion (concept level) — recon subagent in flight
+- [x] docs/analysis/other-sources.md — MongoDB, MSSQL, Oracle, DB2, Kafka, S3 (concept level)
 - [x] docs/analysis/writers.md — Parquet, Iceberg commit flow, Java layer rationale, pure-Go alternatives
 - [x] docs/analysis/state-and-recovery.md — resumable syncs, exactly-once-ish delivery
 - [x] docs/analysis/control-plane.md — job/source/destination models, orchestration
 - [x] [BRAINSTORM] Iceberg write strategy → DECIDED: Option C (see Decisions Log)
-- [ ] Close reference/ for engine build (re-open only via analysis-doc updates)
+- [x] Close reference/ for engine build (re-open only via analysis-doc updates) — CLOSED 2026-07-19
 
 ## Phase 2 — LakeSense Engine
 > Build order strictly: Tier A → A-Compatible → B → C. Badge = battery actually passed (code, not prose).
@@ -121,7 +121,7 @@
 - [ ] Tag v0.1.0
 
 ## Subagent Dispatch Log
-- 2026-07-19: 5 read-only recon agents over reference/ (postgres, mysql, other-sources, writers, olake-ui). 4 returned + distilled into analysis docs by main agent. IN FLIGHT: other-sources recon → feeds docs/analysis/other-sources.md.
+- 2026-07-19: 5 read-only recon agents over reference/ (postgres, mysql, other-sources, writers, olake-ui). All 5 returned + distilled into analysis docs by main agent. None in flight.
 
 ## Decisions Log
 - **2026-07-19 — v2 reset:** Working tree found with v1 artifacts deleted and `lakesense-final-prompt.md` (v2) added by the founder. Treated as intentional restart; committed as checkpoint `8ad0481`. v1 docs recoverable via git history but superseded — v2 phase structure governs.
@@ -129,4 +129,4 @@
 - **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 
 ## Next Action
-Finish docs/analysis/other-sources.md from in-flight recon report; then close reference/ for the engine build and start Phase 2.1 (lsengine skeleton + event schema).
+Phase 2.1: init engine/ Go module; lsengine CLI skeleton (spec/check/discover/sync/backfill/verify) + JSONL event schema in engine/internal/events/ (design ONCE — backend collector consumes verbatim); golangci-lint config + Makefile check target.
