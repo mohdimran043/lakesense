@@ -24,7 +24,7 @@
 
 ## Phase 2 — LakeSense Engine
 > Build order strictly: Tier A → A-Compatible → B → C. Badge = battery actually passed (code, not prose).
-- [ ] 2.1 Engine skeleton: lsengine CLI (spec/check/discover/sync/backfill), JSON config/state, JSONL event schema (designed ONCE)
+- [x] 2.1 Engine skeleton: lsengine CLI (spec/check/discover/sync/backfill/verify), JSON config/state I/O (atomic saves), JSONL event schema v1 in engine/internal/events (designed ONCE — envelope + 16 kinds + typed payloads); make check green (lint 0 issues, -race tests pass)
 - [ ] 2.2 Connector SDK: Connector interface (Spec/Check/Discover/Read) + capability declarations
 - [ ] 2.3 Postgres connector (Tier A): keyset-chunked full load + pgoutput CDC, resumable state, type-mapping table
 - [ ] 2.4 MySQL connector (Tier A): full load + binlog CDC (maintained Go binlog library)
@@ -129,4 +129,4 @@
 - **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 
 ## Next Action
-Phase 2.1: init engine/ Go module; lsengine CLI skeleton (spec/check/discover/sync/backfill/verify) + JSONL event schema in engine/internal/events/ (design ONCE — backend collector consumes verbatim); golangci-lint config + Makefile check target.
+Phase 2.2: Connector SDK in engine/internal/connectors — Connector interface (Spec/Check/Discover/Read), capability declarations (full_load|incremental|cdc), catalog + state types (chunk-set protocol per docs/analysis/state-and-recovery.md), registry wiring the CLI verbs.

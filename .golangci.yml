@@ -1,0 +1,38 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - unparam
+    - errorlint
+    - copyloopvar
+    - nilerr
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    - noctx
+  settings:
+    errcheck:
+      check-type-assertions: true
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - noctx
+          - bodyclose
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
