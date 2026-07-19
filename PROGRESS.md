@@ -15,8 +15,8 @@
 - [x] [BRAINSTORM] Integration strategy → **Winner: OLake UI API polling** (see Decisions Log)
 
 ## Phase 2 — Product Spec
-- [ ] Write `docs/SPEC.md`: all MVP features (event collector, rule engine, multi-channel delivery, ML anomaly [BRAINSTORM model], LLM enrichment, correlation [BRAINSTORM clustering], dashboard) + secondary features 8–13, each with user story / acceptance criteria / MVP-vs-v2 label
-- [ ] Commit spec
+- [x] `docs/SPEC.md` written: 7 MVP features w/ user stories + acceptance criteria; secondary 8–13 planned (8, 9 = build-if-time; 10–13 = stubs). ML model + correlation brainstorms done (winners: MAD z-score; heuristic signature bucketing) — also copied to Decisions Log
+- [x] Commit spec
 
 ## Phase 3 — Architecture & Scaffolding
 - [ ] `docs/ARCHITECTURE.md` with mermaid diagram
@@ -75,7 +75,11 @@
   - C. Sync wrapper/sidecar — LakeSense invokes the OLake CLI itself, owns lifecycle. Reimplements orchestration; couples us to engine internals. 4/6/6/6 = 22
   - **Choice: A**, with two cheap add-ons kept in design (not MVP-blocking): accept OLake's own `webhook_alert_url` pointed at a LakeSense ingest endpoint (instant failure ping), and an optional stats.json volume reader as a v2 metrics booster. Collector is interface-driven so B can be added without touching the event pipeline. Demo mode (Phase 4.1 seed script) makes everything demoable with no OLake install at all.
 
+- **2026-07-19 — [BRAINSTORM] ML anomaly model** (speed/demo/reliability/AI-showcase): A. rolling robust z-score, median+MAD per pipeline-metric 9/7/8/6=**30** ✅ · B. Isolation Forest 7/7/6/8=28 · C. STL decomposition 5/6/5/8=24. **Winner A** — handles cold start with MIN_SAMPLES guard, explainable scores, outlier-resistant; Isolation Forest documented as drop-in v2 once ≥50 runs/pipeline.
+
+- **2026-07-19 — [BRAINSTORM] Correlation clustering** (speed/demo/reliability/AI-showcase): A. heuristic signature bucketing (normalized-error-hash + shared source + 300s sliding window) 9/7/8/5=**29** ✅ · B. TF-IDF+DBSCAN 6/7/6/8=27 · C. LLM-assigned membership 7/8/4/8=27 (fails the no-API-key rule as a core path). **Winner A** — deterministic and testable; LLM still writes incident narrative on top when available.
+
 ---
 
 ## Next Action
-Phase 2: write `docs/SPEC.md` (feature set with user stories, acceptance criteria, MVP/v2 labels; includes ML-model and correlation-clustering brainstorms), then commit.
+Phase 3: write `docs/ARCHITECTURE.md` (mermaid diagram), design DB schema + migrations, scaffold backend/ml/frontend.
