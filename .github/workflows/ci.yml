@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: lint · vet · test · frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+          args: --timeout 5m
+          working-directory: engine
+      - name: golangci-lint (backend)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+          args: --timeout 5m
+          working-directory: backend
+      - name: install frontend deps
+        run: cd frontend && npm ci
+      - name: make check
+        run: make check
+
+  integration:
+    name: migration & feature proofs
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: lakesense
+          POSTGRES_DB: lakesense
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LAKESENSE_DATABASE_URL: postgres://postgres:lakesense@localhost:5432/lakesense?sslmode=disable
+      LAKESENSE_HTTP_ADDR: ":8080"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: migration-correctness proof (sqlite)
+        run: bash scripts/verify-migration.sh sqlite
+      - name: build control plane
+        run: cd backend && go build -o /tmp/lakesense ./cmd/lakesense
+      - name: seed + serve
+        run: |
+          /tmp/lakesense seed --days 14
+          /tmp/lakesense &
+          for i in $(seq 1 20); do curl -fsS localhost:8080/healthz && break; sleep 2; done
+      - name: whole-product feature proof
+        run: LAKESENSE_URL=http://localhost:8080 bash scripts/verify-features.sh

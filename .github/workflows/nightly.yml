@@ -1,0 +1,46 @@
+name: nightly
+
+# Full verification + dependency vulnerability scan. Opens an issue on failure
+# so problems file themselves — the platform babysits itself.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: govulncheck (engine)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          (cd engine && govulncheck ./...)
+      - name: govulncheck (backend)
+        run: (cd backend && govulncheck ./...)
+      - name: npm audit (frontend)
+        run: cd frontend && npm ci && npm audit --audit-level=high
+      - name: migration proof
+        run: bash scripts/verify-migration.sh sqlite
+      - name: file an issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly failed: ${new Date().toISOString().slice(0, 10)}`,
+              body: `The nightly verification/vuln-scan job failed. Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ["nightly", "automated"],
+            });

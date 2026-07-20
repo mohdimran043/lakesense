@@ -3,7 +3,22 @@ GOLANGCI ?= $(shell command -v golangci-lint 2>/dev/null || echo $(HOME)/go/bin/
 GO_MODULES := engine backend
 # website target joins when scaffolded.
 
-.PHONY: check lint vet test build tidy frontend
+.PHONY: check lint vet test build tidy frontend verify verify-all
+
+LAKESENSE_URL ?= http://localhost:8080
+
+# verify: self-contained migration-correctness proof, plus the whole-product
+# feature proof when a stack is reachable.
+verify:
+	bash scripts/verify-migration.sh sqlite
+	@if curl -fsS "$(LAKESENSE_URL)/healthz" >/dev/null 2>&1; then \
+		LAKESENSE_URL=$(LAKESENSE_URL) bash scripts/verify-features.sh; \
+	else \
+		echo "== verify-features skipped (no stack at $(LAKESENSE_URL); run: docker compose -f deploy/docker-compose.yml up -d)"; \
+	fi
+
+verify-all: check verify
+	bash scripts/verify-migration.sh all
 
 check: lint vet test frontend ## lint + vet + tests + frontend build — must pass before any phase completes
 
