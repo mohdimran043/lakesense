@@ -42,8 +42,10 @@ func main() {
 		err = run(logger)
 	case "seed":
 		err = runSeed(logger, args)
+	case "doctor":
+		os.Exit(runDoctor(args))
 	default:
-		fmt.Fprintf(os.Stderr, "lakesense: unknown command %q (want: serve | seed)\n", cmd)
+		fmt.Fprintf(os.Stderr, "lakesense: unknown command %q (want: serve | seed | doctor)\n", cmd)
 		os.Exit(2)
 	}
 	if err != nil {

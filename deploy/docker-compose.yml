@@ -1,0 +1,67 @@
+# LakeSense one-command stack: Postgres (metadata) + control plane.
+# The frontend service joins here once the React app is built (Phase 4.16);
+# until then the API is reachable directly on :8080 and the seeded demo data
+# makes every endpoint explorable.
+#
+# Usage:
+#   cp .env.example .env      # then edit if desired
+#   docker compose up -d      # migrations run on start
+#   docker compose run --rm backend seed --days 14   # demo data (entrypoint is lakesense)
+#   curl localhost:8080/api/v1/pipelines
+#
+# ZERO runtime dependency on reference/ — images build only from engine/ and
+# backend/ sources.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lakesense}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lakesense}
+      POSTGRES_DB: ${POSTGRES_DB:-lakesense}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lakesense} -d ${POSTGRES_DB:-lakesense}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      args:
+        VERSION: ${LAKESENSE_VERSION:-dev}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LAKESENSE_DATABASE_URL: postgres://${POSTGRES_USER:-lakesense}:${POSTGRES_PASSWORD:-lakesense}@postgres:5432/${POSTGRES_DB:-lakesense}?sslmode=disable
+      LAKESENSE_HTTP_ADDR: ":8080"
+      LAKESENSE_ENGINE_PATH: /usr/local/bin/lsengine
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LAKESENSE_ANTHROPIC_MODEL: ${LAKESENSE_ANTHROPIC_MODEL:-claude-opus-4-8}
+    ports:
+      - "${LAKESENSE_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "lakesense", "doctor"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
