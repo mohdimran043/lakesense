@@ -1,0 +1,82 @@
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: #060a12;
+  color: #e6edf0;
+  font-family: "Geist Variable", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.tnum {
+  font-family: "Geist Mono Variable", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glassmorphism card. */
+.glass {
+  background: linear-gradient(180deg, rgba(46, 230, 214, 0.04), rgba(139, 123, 255, 0.03));
+  border: 1px solid rgba(230, 237, 240, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+/* Bioluminescent poster (reduced-motion / no-WebGL hero fallback). */
+.hero-poster {
+  background:
+    radial-gradient(60% 50% at 30% 30%, rgba(46, 230, 214, 0.18), transparent 60%),
+    radial-gradient(55% 45% at 72% 60%, rgba(139, 123, 255, 0.16), transparent 60%),
+    radial-gradient(circle at 50% 50%, rgba(46, 230, 214, 0.06), transparent 70%),
+    #060a12;
+}
+
+.glow-text {
+  text-shadow: 0 0 40px rgba(46, 230, 214, 0.35);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+}
+.reveal.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+::selection {
+  background: rgba(46, 230, 214, 0.3);
+}
+:focus-visible {
+  outline: 2px solid #2ee6d6;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
