@@ -63,18 +63,18 @@
 - [ ] 4.13 Pipeline-as-code + config versioning (YAML canonical, git-style diffs, rollback, export/apply)
 - [ ] 4.14 Environments with promotion (dev/staging/prod, credential overrides, audited)
 - [ ] 4.15 Backfill UI (launch, progress, diff-badge feedback, audit + analytics integration)
-- [ ] 4.16 UI/UX excellence pass:
-  - [ ] 4.16a Design system + [BRAINSTORM] visual identity → Tailwind tokens + component library BEFORE pages
-  - [ ] 4.16b First-run onboarding wizard (<3 min to first sync, demo-data path)
-  - [ ] 4.16c Information design (health scores, sparklines, heatmap, live feed, progressive disclosure)
-  - [ ] 4.16d Power-user layer (Cmd+K palette, shortcuts, global search, breadcrumbs, sticky filters)
-  - [ ] 4.16e States & feedback (empty states, skeletons, typed confirmations, human errors)
-  - [ ] 4.16f Craft details (micro-interactions, responsive, a11y, prefers-reduced-motion)
-  - [ ] 4.16g Screens checklist (Dashboard, Pipelines, Pipeline detail tabs, Create wizard, Source picker, Incidents ×2, Alerts & Rules, Escalations, Channels, Analytics, Backfills, Environments, Audit, Settings)
+- [~] 4.16 UI/UX excellence pass (React dashboard built + dockerized + verified end-to-end via nginx; make check runs frontend build+lint):
+  - [x] 4.16a Design system + [BRAINSTORM] "abyssal depth-sounder" identity → CSS-var tokens (dark default + light swap) + component library BEFORE pages (Card/Button/Badge/Skeleton/EmptyState/Stat + signature HealthMeter/VerifiedBadge/SeverityPill/Sparkline). Fonts self-hosted Space Grotesk/Geist/Geist Mono.
+  - [x] 4.16c Information design (health scores + depth meters, sparklines, verified badges prominent, incident feed, tabs). [ ] freshness heatmap.
+  - [x] 4.16d Power-user layer (Cmd/Ctrl-K command palette → jump to page/pipeline, breadcrumbs). [ ] global search beyond palette, sticky filters.
+  - [x] 4.16e States & feedback (designed empty/loading-skeleton/error states everywhere, human error copy). [ ] typed-confirmation destructive modals (no destructive actions in read-only build yet).
+  - [x] 4.16f Craft (micro-interactions, responsive, a11y focus rings, prefers-reduced-motion respected).
+  - [x] 4.16g Screens BUILT: Dashboard, Pipelines list, Pipeline detail (Overview/Diff/Lineage tabs), Incidents, Data-Diff board, Analytics/Costs, Audit. [ ] REMAINING screens (need write endpoints): Create-pipeline wizard, Source picker, Incident detail, Alerts & Rules builder, Escalations & On-call, Channels, Backfills, Environments, Settings.
+  - [ ] 4.16b First-run onboarding wizard (needs create-pipeline write path)
 - [ ] Secondary (stub "Coming soon" if time-boxed): NL rule creation, LLM digest, SLA prediction, schema-diff impact notes, PII flagging, status page
 
 ## Phase 5 — Dockerization
-- [x] Multi-stage Dockerfiles: engine/Dockerfile (static CGo-free lsengine, distroless-nonroot); backend/Dockerfile (control plane + bundled lsengine, alpine non-root, embedded migrations). [ ] frontend+nginx image → when frontend built.
+- [x] Multi-stage Dockerfiles: engine/Dockerfile (static CGo-free lsengine, distroless-nonroot); backend/Dockerfile (control plane + bundled lsengine, alpine non-root, embedded migrations); frontend/Dockerfile (Vite build → nginx serving SPA + proxying /api). deploy/nginx.conf.
 - [x] deploy/docker-compose.yml + deploy/.env.example; healthchecks (`lakesense doctor`), restart policies, log rotation; migrations on start; zero runtime dependency on reference/ (verified).
 - [x] One-command start VERIFIED: `docker compose up` → backend healthy → `compose run backend seed` → published API returns 3 pipelines health=100/verified (1.1M rows) + cost estimate. Also delivered `lakesense doctor` (Phase 6.5 item, done early).
 
@@ -130,6 +130,7 @@
 - **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 - **2026-07-20 — Write-ahead flush (orchestrator correctness):** while wiring the sync orchestrator, found the interim NDJSON path could record a completed-chunk / advanced-cursor / advanced-CDC-position in state while the rows were still in the bufio buffer — a crash there would lose rows the state claims are durable (Rule 6 violation). Fix: added `StreamWriter.Flush(ctx)` (bufio flush + fsync) to the Writer contract and call it at **every** state-commit boundary BEFORE the state mutation (per-chunk in full-load, before SetCursor in incremental, after backfill and after StreamChanges in CDC). This is the general ack-before-state discipline the Postgres CDC slot logic already followed, now enforced in the source-agnostic layer for all connectors and all destinations. Proven by the crash-resume unit test.
 - **2026-07-20 — [BRAINSTORM] Connector breadth vs product depth (prioritization):** environment has no live MySQL/Mongo/etc. and CDC for those can't be verified here, while the product's wedge (intelligence layer + UX) is fully testable with synthetic/seed data. Options: (A) grind all 13 DB connectors ~14 pts (blocked on live DBs, low marginal value, risks unverifiable "certified" badges — Rule 6 hazard); (B) working demoable dockerized product first, connectors as honest Beta/Coming-soon ~30 pts; (C) 50/50 split ~22 pts. **Chose B**: added SQLite (real, server-less → powers demo + canary), then Phase 3/4 control plane. Remaining DB connectors (MySQL Tier A included) ship as honest badges until a live env verifies them — a big matrix with clear badges beats a matrix of lies (per the connector-honesty principle). MySQL remains the top connector to finish when a MySQL env is available.
+- **2026-07-20 — [BRAINSTORM] Frontend visual identity (4.16a):** grounded in LakeSense's world (a data *lake* that *senses* its depth). (A) "sonar depth-sounder" — abyssal teal-navy dark, luminous aqua signal accent, mono numerals, health=depth-meter, verified=sonar-pill: 8/8/9/8=33; (B) lakehouse blueprint (hairline grid, blue-on-off-white): 29 (drifts to broadsheet AI-default); (C) bioluminescent neon+glass: 29 (drifts to neon AI-default; saved for the marketing site). **Chose A.** Fonts Space Grotesk/Geist/Geist Mono (not Inter/Roboto). Dark default + light via CSS-var swap. The "✓ N rows verified" aqua badge is the signature — makes the product's correctness proof the hero.
 - **2026-07-20 — Command output shapes:** spec/discover print a single JSON document (schema / catalog) on stdout; check prints a human status line; data-path commands (sync/backfill/verify) emit the JSONL event stream. Keeps each command's stdout coherent for its consumer. Discover does NOT inject `_ls_` metadata columns into the catalog — those are engine-internal and injected at write time (dataColumns excludes them from checksums anyway).
 
 ## Next Action
