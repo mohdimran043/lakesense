@@ -34,7 +34,7 @@ jobs:
         run: bash scripts/verify-migration.sh sqlite
       - name: file an issue on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.issues.create({
