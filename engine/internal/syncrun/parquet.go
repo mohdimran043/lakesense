@@ -47,14 +47,10 @@ func (w *parquetWriter) Open(_ context.Context, stream model.Stream, destTable s
 			}
 		}
 	}
-	schema, names := buildParquetSchema(stream)
+	schema, names, colType := buildParquetSchema(stream)
 	colIndex := make(map[string]int, len(names))
 	for i, n := range names {
 		colIndex[n] = i
-	}
-	colType := make(map[string]model.DataType, len(stream.Schema.Columns))
-	for _, c := range stream.Schema.Columns {
-		colType[c.Name] = c.Type
 	}
 	return &parquetStreamWriter{
 		dir:      streamDir,

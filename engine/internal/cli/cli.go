@@ -27,6 +27,7 @@ import (
 	"github.com/lakesense/lakesense/engine/internal/sdk"
 	"github.com/lakesense/lakesense/engine/internal/state"
 	"github.com/lakesense/lakesense/engine/internal/syncrun"
+	"github.com/lakesense/lakesense/engine/internal/verify"
 )
 
 // commonFlags holds the flags shared by data-path commands.
@@ -72,7 +73,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "backfill":
 		err = runStub(ctx, "backfill", rest, stdout)
 	case "verify":
-		err = runStub(ctx, "verify", rest, stdout)
+		err = runVerify(ctx, rest, stdout)
 	case "version":
 		fmt.Fprintln(stdout, buildinfo.Version)
 	case "help", "-h", "--help":
@@ -198,11 +199,7 @@ func runSync(ctx context.Context, args []string, stdout io.Writer) error {
 	if cf.destination == "" {
 		return fmt.Errorf("--destination is required for sync")
 	}
-	destRaw, err := os.ReadFile(cf.destination)
-	if err != nil {
-		return fmt.Errorf("read destination config: %w", err)
-	}
-	destCfg, err := syncrun.LoadDestinationConfig(destRaw)
+	destCfg, err := loadDestination(cf.destination)
 	if err != nil {
 		return err
 	}
@@ -226,6 +223,83 @@ func runSync(ctx context.Context, args []string, stdout io.Writer) error {
 		ConnectorType:   typ,
 		DestinationType: destCfg.Type,
 	})
+}
+
+// runVerify re-checks source vs destination current state for every selected
+// stream, emitting a verify_result per stream. Exit code is non-zero on any
+// mismatch so make verify / CI can gate on it.
+func runVerify(ctx context.Context, args []string, stdout io.Writer) error {
+	cf, err := parseCommon("verify", args)
+	if err != nil {
+		return err
+	}
+	em := events.NewEmitter(stdout, events.NewSyncID(), cf.pipelineID)
+	if err := em.Emit(events.KindEngineInfo, "", events.EngineInfo{Version: buildinfo.Version, Command: "verify"}); err != nil {
+		return err
+	}
+	c, _, err := openConnector(ctx, cf)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = c.Close(ctx) }()
+	fl, ok := c.(sdk.FullLoader)
+	if !ok {
+		return fmt.Errorf("connector does not support full load; verify needs it to re-read the source")
+	}
+	if cf.catalog == "" || cf.destination == "" {
+		return fmt.Errorf("verify requires --catalog and --destination")
+	}
+	var cat model.Catalog
+	if err := config.LoadJSON(cf.catalog, &cat); err != nil {
+		return err
+	}
+	destCfg, err := loadDestination(cf.destination)
+	if err != nil {
+		return err
+	}
+	reader, err := syncrun.OpenReader(destCfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = reader.Close(ctx) }()
+
+	allMatch := true
+	for _, sel := range cat.Selected {
+		stream, ok := cat.Stream(sel.ID())
+		if !ok {
+			return fmt.Errorf("selected stream %s not in catalog", sel.ID())
+		}
+		sr, err := reader.OpenRead(ctx, stream, sel.DestinationTable)
+		if err != nil {
+			return err
+		}
+		res, err := verify.VerifyStream(ctx, verify.StreamInput{
+			Stream: stream, Source: fl, DestReader: sr,
+		})
+		_ = sr.Close(ctx)
+		if err != nil {
+			return err
+		}
+		if err := em.Emit(events.KindVerifyResult, stream.ID(), res); err != nil {
+			return err
+		}
+		if !res.Match {
+			allMatch = false
+		}
+	}
+	if !allMatch {
+		return fmt.Errorf("verify: one or more streams did not match source")
+	}
+	return nil
+}
+
+// loadDestination reads and decodes a destination config document from disk.
+func loadDestination(path string) (syncrun.DestinationConfig, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return syncrun.DestinationConfig{}, fmt.Errorf("read destination config: %w", err)
+	}
+	return syncrun.LoadDestinationConfig(raw)
 }
 
 // parseCommon parses the shared data-path flags and enforces the config path.

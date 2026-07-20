@@ -16,26 +16,20 @@ func testStream() model.Stream {
 			{Name: "amount", Type: model.TypeDecimal},
 			{Name: "note", Type: model.TypeString, Nullable: true},
 			{Name: "ok", Type: model.TypeBool},
-			{Name: model.ColRecordID, Type: model.TypeString},
-			{Name: model.ColIngestedAt, Type: model.TypeTimestamp},
-			{Name: model.ColOpType, Type: model.TypeString},
 		}},
 	}
 }
 
 func TestBuildParquetSchemaRoundTrip(t *testing.T) {
 	stream := testStream()
-	schema, names := buildParquetSchema(stream)
+	schema, names, colType := buildParquetSchema(stream)
 	require.NotNil(t, schema)
-	require.ElementsMatch(t, []string{"id", "amount", "note", "ok", "_ls_id", "_ls_ingested_at", "_ls_op"}, names)
+	require.ElementsMatch(t, []string{"id", "amount", "note", "ok",
+		"_ls_id", "_ls_ingested_at", "_ls_op", "_ls_cdc_timestamp"}, names)
 
 	colIndex := map[string]int{}
 	for i, n := range names {
 		colIndex[n] = i
-	}
-	colType := map[string]model.DataType{}
-	for _, c := range stream.Schema.Columns {
-		colType[c.Name] = c.Type
 	}
 
 	row := sdk.Row{"id": int64(7), "amount": "12.34", "note": nil, "ok": true,

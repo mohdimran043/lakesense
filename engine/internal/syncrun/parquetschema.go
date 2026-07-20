@@ -8,22 +8,45 @@ import (
 	"github.com/parquet-go/parquet-go"
 )
 
-// buildParquetSchema maps a stream's lake schema (data columns + engine _ls_
-// metadata) onto a flat, all-optional Parquet schema. parquet-go orders Group
+// metadataColumns are the engine-owned _ls_ columns injected into every written
+// row at sync time. Discover never surfaces them in a stream's schema, so the
+// Parquet writer must add them explicitly or they would be dropped on write
+// (NDJSON escapes this by marshaling the whole row). All are string-shaped.
+var metadataColumns = []model.Column{
+	{Name: model.ColRecordID, Type: model.TypeString},
+	{Name: model.ColIngestedAt, Type: model.TypeTimestamp},
+	{Name: model.ColOpType, Type: model.TypeString},
+	{Name: model.ColCDCTimestamp, Type: model.TypeTimestamp},
+}
+
+// buildParquetSchema maps a stream's lake schema plus the engine _ls_ metadata
+// columns onto a flat, all-optional Parquet schema. parquet-go orders Group
 // fields alphabetically, so the returned names slice — taken from the built
-// schema — is the authoritative column order for row assembly.
-func buildParquetSchema(stream model.Stream) (*parquet.Schema, []string) {
+// schema — is the authoritative column order for row assembly. The returned
+// colType map (over the same columns) drives value normalization on write.
+func buildParquetSchema(stream model.Stream) (schema *parquet.Schema, names []string, colType map[string]model.DataType) {
 	group := parquet.Group{}
-	for _, c := range stream.Schema.Columns {
+	colType = map[string]model.DataType{}
+	add := func(c model.Column) {
+		if _, seen := colType[c.Name]; seen {
+			return
+		}
 		group[c.Name] = parquet.Optional(parquet.Leaf(parquetType(c.Type)))
+		colType[c.Name] = c.Type
 	}
-	schema := parquet.NewSchema(sanitizeName(stream.ID()), group)
+	for _, c := range stream.Schema.Columns {
+		add(c)
+	}
+	for _, c := range metadataColumns {
+		add(c)
+	}
+	schema = parquet.NewSchema(sanitizeName(stream.ID()), group)
 	cols := schema.Columns()
-	names := make([]string, len(cols))
+	names = make([]string, len(cols))
 	for i, path := range cols {
 		names[i] = path[len(path)-1]
 	}
-	return schema, names
+	return schema, names, colType
 }
 
 // sanitizeName keeps a schema's root name well-formed; the stream id "ns.name"
