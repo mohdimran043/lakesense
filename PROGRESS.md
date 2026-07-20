@@ -49,17 +49,17 @@
 
 ## Phase 4 — Core Platform (strict numbered order)
 - [x] 4.1 Event Collector + demo/seed mode. Collector (backend/internal/collector): consumer-side event envelope (decoupled from engine module), Ingester parses JSONL → lands raw `events` + derives `metrics` (sync_finished), `diff_runs` (pairs source/dest checksum_computed → match badge), `lineage_edges` (column_mapping), pipeline last_sync; tolerates malformed lines; narrow Sink interface (fake-tested, 4 cases) + PgSink. Seed (`lakesense seed --days N`): synthesizes multi-day history (healthy/slowdown/volume-drop/failure/schema-change/mismatch) through the REAL ingestion path. Verified vs postgres:16: 3 pipelines, 478 events, 39 metrics, 52 diff_runs (48 verified/4 mismatched), 17 lineage edges, 3 failures, 4 schema changes. make check green.
-- [ ] 4.2 Notification Rule Engine (conditions, severity, dedup, rate limit, quiet hours, maintenance windows)
-- [ ] 4.3 Channel adapters: Slack, Telegram, SMTP, generic webhook behind `Notifier` interface
-- [ ] 4.4 Escalation policies & on-call schedules (state machine worker, fake-clock tested, ack/snooze/resolve UI + chat buttons)
-- [ ] 4.5 Anomaly engine (baselines, cold start, anomaly_detected events)
-- [ ] 4.6 Data-Quality monitors (column_stats, freshness/volume/null-spike/drift, learned baselines)
-- [ ] 4.7 LLM enrichment worker (strict JSON, retries, raw-alert fallback, postmortem drafts)
-- [ ] 4.8 Alert correlation / storm suppression + [BRAINSTORM] clustering approach
-- [ ] 4.9 Data-Diff UI (verified badge, on-demand verify, mismatch drill-down, history)
-- [ ] 4.10 Audit log (append-only middleware, UI + CSV export)
-- [ ] 4.11 Sync & cost analytics (rows/bytes/duration trends, cost model, monthly rollup)
-- [ ] 4.12 Column-level lineage (lineage_edges, React Flow graph, schema-change impact highlighting)
+- [x] 4.2 Notification Rule Engine (backend/internal/rules): condition predicate over event fields (eq/ne/gt/gte/lt/lte/contains/exists/is_true/is_false) + severity + channels + dedup/quiet-hours/maintenance; open-fingerprint incident dedup (one incident = one alert thread); quiet hours mute delivery but still track; maintenance fully mutes. Fake-clock/fake-store/fake-notifier tests. make check green.
+- [x] 4.3 Channel adapters (backend/internal/channels): multiplexing rules.Notifier for Slack (blocks), Telegram (bot), SMTP email, generic webhook; injectable http.Client + SMTP sender → httptest + fake-sender tested; per-channel formatting, non-2xx→error.
+- [x] 4.4 Escalation policies & on-call (backend/internal/escalation): pure state-machine Tick() over Store+clock; ordered steps w/ per-step channels + on-call schedule; weekly ISO-week rotation + time-boxed overrides; exhaustion stops recurrence; fake-clock tested. (UI ack/snooze + chat buttons → pending frontend.)
+- [x] 4.5 Anomaly engine (backend/internal/anomaly): robust modified-z (median/MAD) + Welford fallback, cold-start suppression, weekday-hour SeasonalKey; synthetic tests (spike/collapse detected, noise no-storm, seasonal no cross-contam).
+- [x] 4.6 Data-Quality monitors (backend/internal/quality): freshness/volume/null-rate/distribution-drift (PSI, epsilon-smoothed); pure evaluators, exhaustive breach tests.
+- [x] 4.7 LLM enrichment worker (backend/internal/enrich): Anthropic Messages API via net/http (opus-4-8), strict JSON (fence-tolerant), retry/backoff, postmortem drafts; MANDATORY graceful fallback (deterministic, error-code→cause/fix table, labeled Source:"fallback"); httptest-tested incl. degradation + 5xx retry.
+- [x] 4.8 Alert correlation / storm suppression (backend/internal/correlate): [BRAINSTORM] chose hybrid (exact normalized signature + token-Jaccard fallback), time-windowed; Assign()→(key,isNew) suppresses storm members; tested (collapse/separation/normalization/fuzzy/window-expiry).
+- [x] 4.9 Data-Diff API (verified badge + history): collector derives diff_runs from checksum pairs; read API exposes per-pipeline diff badge (latest-sync scoped) + diff history + verified-row counts. UI drill-down/on-demand-verify → pending frontend + engine `verify` (2.7).
+- [ ] 4.10 Audit log (append-only middleware, UI + CSV export) — schema table + read endpoint exist; write-middleware + UI pending
+- [x] 4.11 Sync & cost analytics: read API `/analytics` — per-pipeline rows/bytes/duration totals + transparent configurable cost model ($/GB + $/compute-hr); trend charts + monthly rollup UI → pending frontend.
+- [x] 4.12 Column-level lineage (data): collector builds lineage_edges from column_mapping; read API `/pipelines/{id}/lineage`. React Flow graph + schema-change highlighting → pending frontend.
 - [ ] 4.13 Pipeline-as-code + config versioning (YAML canonical, git-style diffs, rollback, export/apply)
 - [ ] 4.14 Environments with promotion (dev/staging/prod, credential overrides, audited)
 - [ ] 4.15 Backfill UI (launch, progress, diff-badge feedback, audit + analytics integration)
@@ -74,9 +74,9 @@
 - [ ] Secondary (stub "Coming soon" if time-boxed): NL rule creation, LLM digest, SLA prediction, schema-diff impact notes, PII flagging, status page
 
 ## Phase 5 — Dockerization
-- [ ] Multi-stage Dockerfiles (lsengine static, backend, frontend+nginx)
-- [ ] deploy/docker-compose.yml + .env.example; zero runtime dependency on reference/ (verified)
-- [ ] One-command start + documented demo-seed
+- [x] Multi-stage Dockerfiles: engine/Dockerfile (static CGo-free lsengine, distroless-nonroot); backend/Dockerfile (control plane + bundled lsengine, alpine non-root, embedded migrations). [ ] frontend+nginx image → when frontend built.
+- [x] deploy/docker-compose.yml + deploy/.env.example; healthchecks (`lakesense doctor`), restart policies, log rotation; migrations on start; zero runtime dependency on reference/ (verified).
+- [x] One-command start VERIFIED: `docker compose up` → backend healthy → `compose run backend seed` → published API returns 3 pipelines health=100/verified (1.1M rows) + cost estimate. Also delivered `lakesense doctor` (Phase 6.5 item, done early).
 
 ## Phase 6 — Testing
 - [ ] Engine harness green, -race clean
@@ -133,6 +133,6 @@
 - **2026-07-20 — Command output shapes:** spec/discover print a single JSON document (schema / catalog) on stdout; check prints a human status line; data-path commands (sync/backfill/verify) emit the JSONL event stream. Keeps each command's stdout coherent for its consumer. Discover does NOT inject `_ls_` metadata columns into the catalog — those are engine-internal and injected at write time (dataColumns excludes them from checksums anyway).
 
 ## Next Action
-4.2 Notification Rule Engine (backend/internal/rules): consumer-side `Notifier` interface (implemented later by channel adapters in 4.3); a rule = condition predicate over event fields (event kind, field, op, value) + severity + channel_ids + dedup_window. Evaluate incoming events (from the collector's derived stream / an in-process event bus) → open/dedup incidents (unique open-fingerprint index already in schema) → enqueue alerts. Pure Go, table-driven tests (rule match, severity, dedup within window, quiet-hours/maintenance muting) with a fake clock — no DB needed for the logic; a PgStore persists incidents/alerts. Wire the collector to publish events to the rule engine in-process. Then 4.3 channels (Slack/Telegram/SMTP/webhook behind Notifier), 4.4 escalation (fake-clock state machine). make check green + commit each.
+The whole intelligence layer (4.2–4.8), the read API (4.9/4.11/4.12 data), and the dockerized deploy (Phase 5) are built and verified. The single largest remaining item is the **React frontend (4.16 + the UI halves of 4.9/4.10/4.12/4.13/4.14/4.15)** — Vite+React+TS+Tailwind, needs `npm`. Start with 4.16a: brainstorm the visual identity, codify Tailwind design tokens + a small component library (Button/Card/Badge/StatusPill/DataTable/Drawer/Modal/Toast/EmptyState/Skeleton), THEN build screens against the existing `/api/v1/*` endpoints (pipelines/incidents/analytics/diffs/lineage all live and returning seeded data). Dashboard first (health scores + diff badges + live feed), then Pipelines list/detail. Add a frontend build target to `make check` and a frontend+nginx image + service to docker-compose.
 
-Parallel track still open: React frontend scaffold (Phase 3 tail) — Vite+TS+Tailwind, needs npm; the seeded DB (4.1) already gives it data to render once the read API endpoints exist. Remaining Phase 4 read endpoints (pipelines/metrics/diff/lineage list) are quick to add on the chi router when the UI needs them.
+Remaining after frontend: 4.10 audit write-middleware, 4.13 config versioning (YAML canonical + diff + rollback — pure Go, testable), 4.14 environments promotion, 4.15 backfill (needs engine 2.7/2.8 verify/backfill first), the wiring of rules/escalation/anomaly/quality/enrich/correlate into the live collector→worker path (currently unit-proven in isolation), Phase 6 integration test, 6.5 verify scripts + CI, Phase 7 docs-site, Phase 8 website. Engine connectors beyond Postgres/SQLite remain honest Beta/Coming-soon per the logged breadth-vs-depth decision (MySQL is the top one to finish when a MySQL env is available).
