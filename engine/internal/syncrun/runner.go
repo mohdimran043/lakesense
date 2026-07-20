@@ -393,9 +393,7 @@ func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.St
 // from the primary key before other metadata is added, so it stays stable
 // across a full-load read and a later CDC replay of the same row.
 func (r *runner) injectMetadata(row sdk.Row, stream model.Stream, op string, cdcTS time.Time) {
-	row[model.ColRecordID] = recordID(row, stream.Schema.PrimaryKey())
-	row[model.ColIngestedAt] = r.now().UTC().Format(time.RFC3339Nano)
-	row[model.ColOpType] = op
+	InjectMetadata(row, stream.Schema.PrimaryKey(), op, r.now())
 	if !cdcTS.IsZero() {
 		row[model.ColCDCTimestamp] = cdcTS.UTC().Format(time.RFC3339Nano)
 	}

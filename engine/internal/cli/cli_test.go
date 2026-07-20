@@ -36,7 +36,7 @@ func TestRunDispatch(t *testing.T) {
 		{name: "sync missing config file", args: []string{"sync", "--config", "/nonexistent.json"}, wantCode: 1, wantErr: "config file"},
 		{name: "sync needs connector type", args: []string{"sync", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
 		{name: "discover needs connector type", args: []string{"discover", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
-		{name: "backfill stub pending", args: []string{"backfill", "--config", cfgPath}, wantCode: 1, wantErr: "not implemented"},
+		{name: "backfill needs stream", args: []string{"backfill", "--config", cfgPath}, wantCode: 1, wantErr: "backfill requires"},
 	}
 
 	for _, tt := range tests {

@@ -56,7 +56,7 @@ type WriteResult struct {
 // DestinationConfig selects and configures a destination. Shape follows the
 // {type, ...} pattern from docs/analysis/engine-protocol.md §4.
 type DestinationConfig struct {
-	Type string `json:"type"` // "ndjson" (v0.1); "parquet"/"iceberg" in 2.5
+	Type string `json:"type"` // "ndjson" | "parquet" (v0.1); "iceberg" in v0.2
 	// Path is the output directory for file destinations.
 	Path string `json:"path,omitempty"`
 }
@@ -69,8 +69,10 @@ func OpenWriter(cfg DestinationConfig) (Writer, error) {
 			return nil, fmt.Errorf("ndjson destination requires a path")
 		}
 		return newNDJSONWriter(cfg.Path)
+	case "parquet":
+		return newParquetWriter(cfg.Path)
 	default:
-		return nil, fmt.Errorf("unknown destination type %q (v0.1 supports \"ndjson\"; parquet/iceberg land in Phase 2.5)", cfg.Type)
+		return nil, fmt.Errorf("unknown destination type %q (v0.1 supports \"ndjson\" and \"parquet\"; iceberg lands in v0.2)", cfg.Type)
 	}
 }
 
