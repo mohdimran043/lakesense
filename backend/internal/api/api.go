@@ -40,6 +40,7 @@ func New(pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	r.Get("/readyz", s.ready)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/version", s.version)
+		s.registerData(r)
 	})
 	return r
 }
