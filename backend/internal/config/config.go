@@ -35,7 +35,7 @@ func Load() (Config, error) {
 		DatabaseURL:     os.Getenv("LAKESENSE_DATABASE_URL"),
 		EnginePath:      env("LAKESENSE_ENGINE_PATH", "lsengine"),
 		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		AnthropicModel:  env("LAKESENSE_ANTHROPIC_MODEL", "claude-sonnet-5"),
+		AnthropicModel:  env("LAKESENSE_ANTHROPIC_MODEL", "claude-opus-4-8"),
 		ShutdownTimeout: 15 * time.Second,
 	}
 	if strings.TrimSpace(cfg.DatabaseURL) == "" {
