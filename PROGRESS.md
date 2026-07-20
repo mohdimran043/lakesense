@@ -79,9 +79,9 @@
 - [x] One-command start VERIFIED: `docker compose up` → backend healthy → `compose run backend seed` → published API returns 3 pipelines health=100/verified (1.1M rows) + cost estimate. Also delivered `lakesense doctor` (Phase 6.5 item, done early).
 
 ## Phase 6 — Testing
-- [ ] Engine harness green, -race clean
-- [ ] Backend unit suites (rules, dedup, correlation, escalation fake-clock, quality breach, diff bisection, config diff/rollback, promotion, audit, channel formatting)
-- [ ] Anomaly/quality synthetic-data tests
+- [x] Engine harness green, -race clean — all engine suites run under `-race` in `make check` (0 issues); env-gated Postgres integration + self-contained sqlite/syncrun.
+- [x] Backend unit suites — rules + dedup, correlation, escalation (fake clock), quality breach, config diff/rollback (configver), promotion (envs), audit, channel formatting all built & tested. [ ] diff **bisection** awaits the engine `verify` verb (2.7).
+- [x] Anomaly/quality synthetic-data tests — anomaly: injected spike & volume-collapse detected, noise no-storm, seasonal no cross-contamination; quality: PSI drift + null/volume/freshness breach cases.
 - [~] Full integration flow — proven in pieces (engine crash-resume test, verify-migration checksum match, rules/escalation fake-clock suites, verify-features 11/11); not yet one scripted chain (awaits engine verify/backfill verbs + write API).
 - [x] Frontend build gate (strict tsc + Vite build in make check). [ ] component smoke tests.
 - [x] docs/TEST-REPORT.md — grounded: 104 test funcs / 22 packages, -race clean, both verify scripts, honest gaps.

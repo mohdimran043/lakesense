@@ -63,6 +63,51 @@ Prefer the API? `curl localhost:8080/api/v1/pipelines`. Prefer proof?
 `make verify` runs an end-to-end migration-correctness check (source/destination
 checksums must match) plus a whole-product feature proof.
 
+## Create & run a pipeline
+
+> **Status:** today pipelines are created and run through the **engine CLI**
+> (`lsengine`) with JSON config files — the flow below is real and tested
+> (`scripts/verify-migration.sh` does exactly this). An in-dashboard
+> **create-pipeline wizard** and a control-plane write API are the next milestone
+> (the dashboard is read-only for now; `seed` populates it with demo data).
+
+A pipeline is three JSON files — a source, a destination, and a stream catalog —
+driven through four verbs: `spec` (see a connector's config schema), `check`
+(validate connectivity), `discover` (list streams), and `sync` (replicate).
+
+```bash
+# 1. Inspect what a connector needs
+lsengine spec --connector postgres
+
+# 2. Describe your source (secrets via the file, never flags)
+cat > source.json <<'JSON'
+{ "type": "postgres", "host": "db.internal", "database": "shop",
+  "user": "readonly", "password": "…", "chunk_strategy": "ctid" }
+JSON
+
+# 3. Validate connectivity + prerequisites (e.g. wal_level=logical for CDC)
+lsengine check --config source.json
+
+# 4. Discover streams, then choose what to sync and how
+lsengine discover --config source.json > catalog.json
+#    edit catalog.json → add "selected_streams":
+#    [{ "namespace":"public","name":"orders","mode":"cdc" }]
+
+# 5. Pick a destination (NDJSON today; Parquet/Iceberg land in v0.2)
+echo '{ "type": "ndjson", "path": "./out" }' > dest.json
+
+# 6. Replicate — resumable, with source/destination checksums on stdout
+lsengine sync --config source.json --destination dest.json \
+  --catalog catalog.json --state state.json
+```
+
+The `sync` command streams JSONL events (progress, per-stream `checksum_computed`
+for both sides, `sync_finished`). Point the control plane's collector at a
+pipeline and those events become the dashboard's health, diff badges, and
+lineage. Run `sync` again with the same `--state` to resume or pick up CDC
+changes. Full connector fields: [`lsengine spec`](engine) and the
+[type-mapping analysis](docs/analysis).
+
 ## Supported sources
 
 Maturity badges reflect the test battery a connector actually passes — a big
