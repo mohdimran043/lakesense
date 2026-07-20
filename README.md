@@ -98,8 +98,8 @@ lsengine discover --config source.json > catalog.json
 #    edit catalog.json → add "selected_streams":
 #    [{ "namespace":"public","name":"orders","mode":"cdc" }]
 
-# 5. Pick a destination (NDJSON today; Parquet/Iceberg land in v0.2)
-echo '{ "type": "ndjson", "path": "./out" }' > dest.json
+# 5. Pick a destination — NDJSON or Parquet today; append-mode Iceberg in v0.2
+echo '{ "type": "parquet", "path": "./out" }' > dest.json   # or "ndjson"
 
 # 6. Replicate — resumable, with source/destination checksums on stdout
 lsengine sync --config source.json --destination dest.json \

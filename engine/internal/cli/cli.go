@@ -103,9 +103,14 @@ Commands:
   check     validate connectivity and configuration
   discover  list streams and their schemas as a catalog
   sync      run replication for the selected streams
-  backfill  re-sync a bounded slice of a stream (PK range or time window)
-  verify    re-check counts and checksums source vs destination
+  backfill  re-sync a bounded slice of a stream, merged idempotently:
+              --stream ns.name (--pk-min X --pk-max Y | --since field=value)
+  verify    re-check source vs destination current state (exit 1 on mismatch):
+              --config … --destination … --catalog …
   version   print the engine version
+
+Destinations: --destination points at a JSON config; type is "ndjson" or
+"parquet" (v0.1). Parquet writes a directory of part-files per stream.
 `)
 }
 

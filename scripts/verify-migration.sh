@@ -76,6 +76,22 @@ PY
   assert "output file has 500 rows" "$([ "${lines:-0}" = "500" ] && echo ok)"
   meta="$(head -1 "$WORK/out/main.widgets.ndjson" 2>/dev/null | grep -c _ls_id)"
   assert "engine metadata injected (_ls_id present)" "$([ "${meta:-0}" = "1" ] && echo ok)"
+
+  # --- Open lakehouse output + on-demand proof: Parquet + lsengine verify ---
+  section "Migration proof: sqlite → parquet, verified"
+  echo "{\"type\":\"parquet\",\"path\":\"$WORK/pq\"}" > "$WORK/dstpq.json"
+  "$WORK/lsengine" sync --config "$WORK/src.json" --destination "$WORK/dstpq.json" \
+    --catalog "$WORK/cat.json" --state "$WORK/statepq.json" >/dev/null 2>&1
+  parts="$(find "$WORK/pq/main.widgets" -name '*.parquet' 2>/dev/null | wc -l | tr -d ' ')"
+  assert "parquet part-files written" "$([ "${parts:-0}" -ge 1 ] && echo ok)"
+
+  "$WORK/lsengine" verify --config "$WORK/src.json" --destination "$WORK/dstpq.json" \
+    --catalog "$WORK/cat.json" > "$WORK/verify.jsonl" 2>/dev/null
+  vcode=$?
+  assert "lsengine verify exits 0 (parquet matches source)" "$([ "$vcode" = "0" ] && echo ok)"
+  vmatch="$(python3 -c 'import json,sys
+print(any(json.loads(l).get("payload",{}).get("match") for l in open(sys.argv[1]) if json.loads(l).get("event")=="verify_result"))' "$WORK/verify.jsonl" 2>/dev/null)"
+  assert "verify_result reports match:true" "$([ "$vmatch" = "True" ] && echo ok)"
 }
 
 case "$SOURCE" in
