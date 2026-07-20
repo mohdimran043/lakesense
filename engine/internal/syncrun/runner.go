@@ -159,12 +159,11 @@ func (r *runner) runFullLoad(ctx context.Context, stream model.Stream, sel model
 
 	src := &digest{}
 	cols := dataColumns(stream)
-	var streamRead int64
 	for _, chunk := range remaining {
 		chunkStart := r.now()
 		var chunkRows int64
 		err := fl.ReadChunk(ctx, stream, chunk, func(ctx context.Context, row sdk.Row) error {
-			return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, &chunkRows, &streamRead)
+			return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, &chunkRows)
 		})
 		if err != nil {
 			return fmt.Errorf("read chunk [%s,%s) of %s: %w", chunk.Min, chunk.Max, stream.ID(), err)
@@ -190,7 +189,7 @@ func (r *runner) runFullLoad(ctx context.Context, stream model.Stream, sel model
 		}
 	}
 
-	return r.finishStream(ctx, stream, sw, model.ModeFullLoad, src, streamRead)
+	return r.finishStream(ctx, stream, sw, model.ModeFullLoad, src)
 }
 
 // runIncremental reads rows past the stored cursor (all rows on first run) and
@@ -213,9 +212,8 @@ func (r *runner) runIncremental(ctx context.Context, stream model.Stream, sel mo
 
 	src := &digest{}
 	cols := dataColumns(stream)
-	var streamRead, unused int64
 	newCursor, err := ir.ReadIncrement(ctx, stream, sel.CursorField, since, func(ctx context.Context, row sdk.Row) error {
-		return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, &unused, &streamRead)
+		return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, nil)
 	})
 	if err != nil {
 		return fmt.Errorf("incremental read of %s: %w", stream.ID(), err)
@@ -234,7 +232,7 @@ func (r *runner) runIncremental(ctx context.Context, stream model.Stream, sel mo
 		}
 	}
 
-	return r.finishStream(ctx, stream, sw, model.ModeIncremental, src, streamRead)
+	return r.finishStream(ctx, stream, sw, model.ModeIncremental, src)
 }
 
 // runCDCGroup runs the sequential-log CDC flow for one or more streams sharing
@@ -316,7 +314,7 @@ func (r *runner) runCDCGroup(ctx context.Context, sels []model.SelectedStream) e
 		}
 		s, _ := r.opts.Catalog.Stream(ch.StreamID)
 		op := cdcOp(ch.Kind)
-		return r.handleRow(ctx, sw, s, dataColumns(s), digests[ch.StreamID], ch.Data, op, ch.Timestamp, new(int64), &r.totalRead)
+		return r.handleRow(ctx, sw, s, dataColumns(s), digests[ch.StreamID], ch.Data, op, ch.Timestamp, nil)
 	})
 	if err != nil {
 		return fmt.Errorf("stream changes: %w", err)
@@ -359,10 +357,9 @@ func (r *runner) cdcBackfill(ctx context.Context, stream model.Stream, sw Stream
 		return fmt.Errorf("split %s for CDC backfill: %w", stream.ID(), err)
 	}
 	cols := dataColumns(stream)
-	var read int64
 	for _, chunk := range chunks {
 		if err := fl.ReadChunk(ctx, stream, chunk, func(ctx context.Context, row sdk.Row) error {
-			return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, new(int64), &read)
+			return r.handleRow(ctx, sw, stream, cols, src, row, "r", time.Time{}, nil)
 		}); err != nil {
 			return fmt.Errorf("CDC backfill chunk of %s: %w", stream.ID(), err)
 		}
@@ -371,8 +368,10 @@ func (r *runner) cdcBackfill(ctx context.Context, stream model.Stream, sw Stream
 }
 
 // handleRow is the shared write path: source-side checksum over data columns,
-// engine-metadata injection, write, and counter bookkeeping.
-func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.Stream, cols []string, src *digest, row sdk.Row, op string, cdcTS time.Time, streamCount, runCount *int64) error {
+// engine-metadata injection, write, and counter bookkeeping. streamCount is an
+// optional per-phase counter (e.g. rows in the current chunk); the run-level
+// read/write totals are always advanced.
+func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.Stream, cols []string, src *digest, row sdk.Row, op string, cdcTS time.Time, streamCount *int64) error {
 	h, err := hashRow(row, cols)
 	if err != nil {
 		return err
@@ -382,8 +381,10 @@ func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.St
 	if err := sw.WriteRow(ctx, row); err != nil {
 		return err
 	}
-	*streamCount++
-	*runCount++
+	if streamCount != nil {
+		*streamCount++
+	}
+	r.totalRead++
 	r.totalWrite++
 	return nil
 }
@@ -401,12 +402,8 @@ func (r *runner) injectMetadata(row sdk.Row, stream model.Stream, op string, cdc
 }
 
 // finishStream closes a stream writer and emits its results and checksums.
-func (r *runner) finishStream(ctx context.Context, stream model.Stream, sw StreamWriter, mode model.SyncMode, src *digest, read int64) error {
-	if err := r.closeAndReport(ctx, stream, sw, mode, src); err != nil {
-		return err
-	}
-	_ = read
-	return nil
+func (r *runner) finishStream(ctx context.Context, stream model.Stream, sw StreamWriter, mode model.SyncMode, src *digest) error {
+	return r.closeAndReport(ctx, stream, sw, mode, src)
 }
 
 // closeAndReport closes the writer and emits checksum_computed for both sides

@@ -247,6 +247,7 @@ func TestFullLoadWritesEveryRowWithMatchingChecksums(t *testing.T) {
 	assert.Equal(t, int64(6), dst.Rows)
 	assert.Equal(t, src.Checksum, dst.Checksum, "source and destination checksums must match")
 	assert.Equal(t, int64(6), fin.RowsWritten)
+	assert.Equal(t, int64(6), fin.RowsRead, "run-level rows_read must count full-load rows, not stay 0")
 
 	rows := ndjsonLines(t, filepath.Join(dir, "public.widgets.ndjson"))
 	require.Len(t, rows, 6)
