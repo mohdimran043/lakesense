@@ -34,3 +34,7 @@ data/
 *.swp
 .idea/
 .vscode/
+
+# Local build spec + progress tracker (not published)
+lakesense-final-prompt.md
+PROGRESS.md
