@@ -20,6 +20,12 @@ verify:
 verify-all: check verify
 	bash scripts/verify-migration.sh all
 
+# release-check: clean-machine simulation — builds the whole product from the
+# committed tree only and proves the quickstart. Run before every tag (slow;
+# builds Docker images from scratch).
+release-check:
+	bash scripts/verify-release.sh
+
 check: lint vet test frontend website ## lint + vet + tests + frontend & website builds — must pass before any phase completes
 
 # Frontend: lint + strict typecheck + production build. Skipped gracefully if

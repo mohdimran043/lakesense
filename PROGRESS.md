@@ -57,12 +57,12 @@
 - [x] 4.7 LLM enrichment worker (backend/internal/enrich): Anthropic Messages API via net/http (opus-4-8), strict JSON (fence-tolerant), retry/backoff, postmortem drafts; MANDATORY graceful fallback (deterministic, error-code→cause/fix table, labeled Source:"fallback"); httptest-tested incl. degradation + 5xx retry.
 - [x] 4.8 Alert correlation / storm suppression (backend/internal/correlate): [BRAINSTORM] chose hybrid (exact normalized signature + token-Jaccard fallback), time-windowed; Assign()→(key,isNew) suppresses storm members; tested (collapse/separation/normalization/fuzzy/window-expiry).
 - [x] 4.9 Data-Diff API (verified badge + history): collector derives diff_runs from checksum pairs; read API exposes per-pipeline diff badge (latest-sync scoped) + diff history + verified-row counts. UI drill-down/on-demand-verify → pending frontend + engine `verify` (2.7).
-- [ ] 4.10 Audit log (append-only middleware, UI + CSV export) — schema table + read endpoint exist; write-middleware + UI pending
+- [x] 4.10 Audit log (backend/internal/audit): append-only Recorder seam + Log() helper + PgRecorder (no update/delete path); before/after field-diff (order-independent). Schema table + read endpoint live. Tested. [ ] write-middleware wiring on mutations + CSV export UI pending (needs write endpoints).
 - [x] 4.11 Sync & cost analytics: read API `/analytics` — per-pipeline rows/bytes/duration totals + transparent configurable cost model ($/GB + $/compute-hr); trend charts + monthly rollup UI → pending frontend.
 - [x] 4.12 Column-level lineage (data): collector builds lineage_edges from column_mapping; read API `/pipelines/{id}/lineage`. React Flow graph + schema-change highlighting → pending frontend.
-- [ ] 4.13 Pipeline-as-code + config versioning (YAML canonical, git-style diffs, rollback, export/apply)
-- [ ] 4.14 Environments with promotion (dev/staging/prod, credential overrides, audited)
-- [ ] 4.15 Backfill UI (launch, progress, diff-badge feedback, audit + analytics integration)
+- [x] 4.13 Pipeline-as-code + config versioning (backend/internal/configver): canonical deterministic YAML (equal configs render byte-identically; no-op changes skip), numbered immutable versions, git-style LCS line diff, append-only rollback. Tested. [ ] export/apply API + versions UI pending.
+- [x] 4.14 Environments with promotion (backend/internal/envs): clone config version to target env with per-target credential overrides, streams/schedule preserved, source immutable, MissingCredentials() guard. Tested. [ ] promotion API + UI pending.
+- [ ] 4.15 Backfill UI (launch, progress, diff-badge feedback) — blocked on engine 2.8 backfill verb
 - [~] 4.16 UI/UX excellence pass (React dashboard built + dockerized + verified end-to-end via nginx; make check runs frontend build+lint):
   - [x] 4.16a Design system + [BRAINSTORM] "abyssal depth-sounder" identity → CSS-var tokens (dark default + light swap) + component library BEFORE pages (Card/Button/Badge/Skeleton/EmptyState/Stat + signature HealthMeter/VerifiedBadge/SeverityPill/Sparkline). Fonts self-hosted Space Grotesk/Geist/Geist Mono.
   - [x] 4.16c Information design (health scores + depth meters, sparklines, verified badges prominent, incident feed, tabs). [ ] freshness heatmap.
@@ -82,14 +82,14 @@
 - [ ] Engine harness green, -race clean
 - [ ] Backend unit suites (rules, dedup, correlation, escalation fake-clock, quality breach, diff bisection, config diff/rollback, promotion, audit, channel formatting)
 - [ ] Anomaly/quality synthetic-data tests
-- [ ] Full integration flow (seed→pipeline→sync→kill/resume→corrupt/verify→backfill→failure→alert→escalate→incident)
-- [ ] Frontend build + smoke tests
-- [ ] docs/TEST-REPORT.md
+- [~] Full integration flow — proven in pieces (engine crash-resume test, verify-migration checksum match, rules/escalation fake-clock suites, verify-features 11/11); not yet one scripted chain (awaits engine verify/backfill verbs + write API).
+- [x] Frontend build gate (strict tsc + Vite build in make check). [ ] component smoke tests.
+- [x] docs/TEST-REPORT.md — grounded: 104 test funcs / 22 packages, -race clean, both verify scripts, honest gaps.
 
 ## Phase 6.5 — Solo-Founder Automation Suite
 - [x] scripts/verify-migration.sh <source-type> (+ `all`) — real sqlite→ndjson e2e, asserts source/dest checksum MATCH + exact counts + metadata; VERIFIED 9/9. scripts/lib.sh colored PASS/FAIL table.
 - [x] scripts/verify-features.sh (whole-product API proof) — VERIFIED 11/11 against live compose stack (diff badges 3/3, 1.53M rows, analytics, lineage, health). Write-path assertions honestly TODO until those endpoints ship.
-- [ ] scripts/verify-release.sh (clean-machine simulation)
+- [x] scripts/verify-release.sh (clean-machine simulation) — `git archive HEAD` → fresh build → quickstart; VERIFIED 8/8: the whole product builds from committed files only, dashboard + API serve seeded data. `make release-check`.
 - [x] make verify / make verify-all (verify-features auto-skips when no stack reachable)
 - [x] .github/workflows/ci.yml (make check + proofs vs postgres service), release.yml (tag→GHCR images + binaries), nightly.yml (govulncheck + npm audit + proof, auto-files issue). YAML validated.
 - [x] Dependabot config (gomod ×2, npm, actions; weekly)
@@ -117,9 +117,28 @@
 - [x] Build/deploy instructions (website/README.md). [ ] Lighthouse ≥85 not measured here.
 
 ## Phase 9 — Final Pass
-- [ ] verify-release.sh clean-machine pass; make verify-all green; fix gaps
-- [ ] Final PROGRESS.md: 7-minute Demo Script + Solo Operations Runbook
-- [ ] Tag v0.1.0
+- [x] verify-release.sh clean-machine pass (8/8); make check + verify green
+- [x] Demo Script + Solo Operations Runbook (below)
+- [ ] Tag v0.1.0 — held until write-path UI + integration flow land (a defensible v0.1.0 of the current product could be cut now via `git tag v0.1.0`; release.yml builds+pushes images on tag)
+
+### 🎬 Demo Script (≈7 minutes)
+1. **Deploy** — `cd deploy && cp .env.example .env && docker compose up -d` → wait for `docker compose ps` backend `healthy` (via `lakesense doctor`).
+2. **Seed** — `docker compose run --rm backend seed --days 14` (realistic multi-day history: healthy, slowdown, volume-drop, failure, schema-change, mismatch — no live DB needed).
+3. **Dashboard** — open `http://localhost:3000`. Fleet overview: health scores + aqua "✓ verified" badges + cost + incident feed.
+4. **Correctness** — Data-Diff board: "1.53M rows verified", 0 mismatches. Open a pipeline → Diff tab → per-sync source/dest checksums.
+5. **Prove it live** — `make verify` → migration-correctness (source/dest checksum MATCH on a real 500-row sync) + whole-product feature proof (11/11).
+6. **Engine e2e** — `bash scripts/verify-migration.sh sqlite` shows the raw JSONL event stream + checksum match.
+7. **Pipeline detail** — Overview trend chart (spot the volume-drop dip), Lineage tab (source→dest columns), Analytics (transparent cost model).
+8. **Command palette** — Cmd/Ctrl-K → jump to any pipeline. Toggle light/dark.
+9. **The website** — `cd website && npm run dev` → the bioluminescent hero + Paywall-Buster strip.
+
+### 🛠 Solo Operations Runbook (weekly, ~5 commands)
+1. `make verify` — migration-correctness + whole-product proof (needs a stack up).
+2. Check nightly CI — `.github/workflows/nightly.yml` auto-files a GitHub issue on failure (govulncheck + npm audit + migration proof).
+3. `lakesense doctor` (or the compose healthcheck) — DB/migrations/freshness at a glance; `--json` for scripts.
+4. Merge green Dependabot PRs (CI validates each).
+5. Before tagging: `make release-check` (clean-machine build) → `git tag v0.1.x` (release.yml builds+pushes images + cuts the GitHub Release).
+- Pending automation: canary pipeline (nightly self-test), `scripts/backup-metadata.sh` (pg_dump + retention), weekly LLM self-report.
 
 ## Subagent Dispatch Log
 - 2026-07-19: 5 read-only recon agents over reference/ (postgres, mysql, other-sources, writers, olake-ui). All 5 returned + distilled into analysis docs by main agent. None in flight.
