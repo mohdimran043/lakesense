@@ -1,0 +1,22 @@
+-- Reverse of 0001_init: drop in FK-safe order.
+DROP TABLE IF EXISTS backfill_jobs;
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS quality_results;
+DROP TABLE IF EXISTS quality_monitors;
+DROP TABLE IF EXISTS lineage_edges;
+DROP TABLE IF EXISTS diff_findings;
+DROP TABLE IF EXISTS diff_runs;
+DROP TABLE IF EXISTS acks;
+DROP TABLE IF EXISTS alerts;
+DROP TABLE IF EXISTS incidents;
+DROP TABLE IF EXISTS rules;
+DROP TABLE IF EXISTS oncall_schedules;
+DROP TABLE IF EXISTS escalation_policies;
+DROP TABLE IF EXISTS channels;
+DROP TABLE IF EXISTS baselines;
+DROP TABLE IF EXISTS column_stats;
+DROP TABLE IF EXISTS metrics;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS pipeline_config_versions;
+DROP TABLE IF EXISTS pipelines;
+DROP TABLE IF EXISTS environments;

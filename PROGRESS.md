@@ -42,10 +42,10 @@
 - [ ] 2.10 Benchmarks: script + honest measured numbers in docs/BENCHMARKS.md
 
 ## Phase 3 — Control Plane Spec & Scaffolding
-- [ ] docs/SPEC.md — user story + acceptance criteria + MVP/v2 label per feature
-- [ ] docs/ARCHITECTURE.md with mermaid diagram
-- [ ] DB schema + migrations (environments, pipelines, pipeline_config_versions, events, metrics, column_stats, baselines, rules, incidents, alerts, escalation_policies, oncall_schedules, acks, channels, diff_runs, diff_findings, lineage_edges, quality_monitors, quality_results, audit_log, backfill_jobs)
-- [ ] Scaffold Go backend (health endpoint, migration runner, Makefile run/test/lint/check) + React frontend; both run empty; commit per scaffold
+- [x] docs/SPEC.md — user story + acceptance criteria + MVP/v2 label per feature
+- [x] docs/ARCHITECTURE.md with mermaid diagram (system flow + data flow + decisions)
+- [x] DB schema + migrations — all 21 domain tables in backend/internal/store/migrations/0001_init (embedded); applied cleanly against a real postgres:16 container (22 tables incl. schema_migrations); down migration in FK-safe order
+- [x] Scaffold Go backend: cmd/lakesense (errgroup workers + graceful shutdown), internal/{config,store,api,buildinfo}; chi router w/ healthz/readyz/version; golang-migrate embedded runner; deploy/.env.example. Verified live: migrate → serve → healthz/readyz/version 200. backend added to `make check` (lint 0, vet, -race). [ ] React frontend scaffold still pending.
 
 ## Phase 4 — Core Platform (strict numbered order)
 - [ ] 4.1 Event Collector + demo/seed mode (multi-day simulated event stream)

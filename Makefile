@@ -1,7 +1,7 @@
 GOLANGCI ?= $(shell command -v golangci-lint 2>/dev/null || echo $(HOME)/go/bin/golangci-lint)
 
-GO_MODULES := engine
-# backend joins GO_MODULES in Phase 3; frontend/website targets join when scaffolded.
+GO_MODULES := engine backend
+# frontend/website targets join when scaffolded.
 
 .PHONY: check lint vet test build tidy
 
