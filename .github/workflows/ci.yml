@@ -21,13 +21,13 @@ jobs:
         with:
           node-version: "20"
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           args: --timeout 5m
           working-directory: engine
       - name: golangci-lint (backend)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           args: --timeout 5m
