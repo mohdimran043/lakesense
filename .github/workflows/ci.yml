@@ -13,7 +13,7 @@ jobs:
     name: lint · vet · test · frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -55,7 +55,7 @@ jobs:
       LAKESENSE_DATABASE_URL: postgres://postgres:lakesense@localhost:5432/lakesense?sslmode=disable
       LAKESENSE_HTTP_ADDR: ":8080"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
