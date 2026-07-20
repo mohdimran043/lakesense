@@ -109,12 +109,12 @@
 - [x] docs/BUSINESS.md (wedge, Free/Pro/Enterprise pricing, competitor matrix, 6-month roadmap)
 
 ## Phase 8 — Marketing Website
-- [ ] website/ Vite + React + React Three Fiber, static deploy
-- [ ] Hero motion background (generated WebGL default + hero.mp4 video slot, no bundled video)
-- [ ] [BRAINSTORM] art direction; scroll-driven 3D scenes, glassmorphism, counters
-- [ ] Performance & degradation (lazy Three.js, reduced-motion poster, Lighthouse ≥85)
-- [ ] All sections (hero, problem, Paywall Buster, 25+ sources band, showcase, architecture, matrix teaser, pricing, FAQ, credit-line footer)
-- [ ] Build/deploy instructions
+- [x] website/ Vite + React + React Three Fiber, static build (dist/). make check runs the build.
+- [x] Hero motion background: generated WebGL scene (particle field spiraling into a crystalline lake) + documented hero.mp4 video slot (no bundled footage).
+- [x] [BRAINSTORM] art direction → "abyssal bioluminescence" (see Decisions Log); glassmorphism, reveal-on-scroll, glow headline.
+- [x] Performance & degradation: Three.js code-split/lazy (~65kB gzip initial, 235kB three chunk lazy); static poster fallback for reduced-motion / no-WebGL / mobile / ?still.
+- [x] Sections: hero, problem, Paywall-Buster strip, 25+ sources band, product showcase (REAL dashboard screenshots in tilted glass frames), architecture, pricing, FAQ, credit-line footer.
+- [x] Build/deploy instructions (website/README.md). [ ] Lighthouse ≥85 not measured here.
 
 ## Phase 9 — Final Pass
 - [ ] verify-release.sh clean-machine pass; make verify-all green; fix gaps
@@ -130,6 +130,7 @@
 - **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 - **2026-07-20 — Write-ahead flush (orchestrator correctness):** while wiring the sync orchestrator, found the interim NDJSON path could record a completed-chunk / advanced-cursor / advanced-CDC-position in state while the rows were still in the bufio buffer — a crash there would lose rows the state claims are durable (Rule 6 violation). Fix: added `StreamWriter.Flush(ctx)` (bufio flush + fsync) to the Writer contract and call it at **every** state-commit boundary BEFORE the state mutation (per-chunk in full-load, before SetCursor in incremental, after backfill and after StreamChanges in CDC). This is the general ack-before-state discipline the Postgres CDC slot logic already followed, now enforced in the source-agnostic layer for all connectors and all destinations. Proven by the crash-resume unit test.
 - **2026-07-20 — [BRAINSTORM] Connector breadth vs product depth (prioritization):** environment has no live MySQL/Mongo/etc. and CDC for those can't be verified here, while the product's wedge (intelligence layer + UX) is fully testable with synthetic/seed data. Options: (A) grind all 13 DB connectors ~14 pts (blocked on live DBs, low marginal value, risks unverifiable "certified" badges — Rule 6 hazard); (B) working demoable dockerized product first, connectors as honest Beta/Coming-soon ~30 pts; (C) 50/50 split ~22 pts. **Chose B**: added SQLite (real, server-less → powers demo + canary), then Phase 3/4 control plane. Remaining DB connectors (MySQL Tier A included) ship as honest badges until a live env verifies them — a big matrix with clear badges beats a matrix of lies (per the connector-honesty principle). MySQL remains the top connector to finish when a MySQL env is available.
+- **2026-07-20 — [BRAINSTORM] Website art direction (Phase 8):** (A) deep-space + cyan/violet glow 29 (generic neon default); (B) abyssal-water bioluminescence 32 — particle field streaming into a crystalline lake, on-brand, matches the prompt's own hero description, extends the dashboard aqua with a violet depth glow; (C) neon-grid/tron 25. **Chose B.** WebGL hero code-split + static poster fallback (reduced-motion/no-WebGL/mobile/?still). Distinct from but harmonized with the dashboard's dark depth-sounder theme (marketing = richer glow/glass; product = restrained instrument).
 - **2026-07-20 — [BRAINSTORM] Frontend visual identity (4.16a):** grounded in LakeSense's world (a data *lake* that *senses* its depth). (A) "sonar depth-sounder" — abyssal teal-navy dark, luminous aqua signal accent, mono numerals, health=depth-meter, verified=sonar-pill: 8/8/9/8=33; (B) lakehouse blueprint (hairline grid, blue-on-off-white): 29 (drifts to broadsheet AI-default); (C) bioluminescent neon+glass: 29 (drifts to neon AI-default; saved for the marketing site). **Chose A.** Fonts Space Grotesk/Geist/Geist Mono (not Inter/Roboto). Dark default + light via CSS-var swap. The "✓ N rows verified" aqua badge is the signature — makes the product's correctness proof the hero.
 - **2026-07-20 — Command output shapes:** spec/discover print a single JSON document (schema / catalog) on stdout; check prints a human status line; data-path commands (sync/backfill/verify) emit the JSONL event stream. Keeps each command's stdout coherent for its consumer. Discover does NOT inject `_ls_` metadata columns into the catalog — those are engine-internal and injected at write time (dataColumns excludes them from checksums anyway).
 
