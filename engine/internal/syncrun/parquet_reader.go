@@ -2,6 +2,7 @@ package syncrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -92,7 +93,7 @@ func readParquetPart(path string) ([]sdk.Row, error) {
 		for i := 0; i < n; i++ {
 			out = append(out, parquetToRow(buf[i], names))
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

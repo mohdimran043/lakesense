@@ -66,7 +66,8 @@ func TestParquetResumeAppendsWithoutLoss(t *testing.T) {
 	sr, _ := r.OpenRead(context.Background(), stream, "")
 	ids := map[string]bool{}
 	_ = sr.Read(context.Background(), nil, func(_ context.Context, row sdk.Row) error {
-		ids[row["_ls_id"].(string)] = true
+		id, _ := row["_ls_id"].(string)
+		ids[id] = true
 		return nil
 	})
 	require.True(t, ids["1"], "row from before the crash must survive")
