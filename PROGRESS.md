@@ -26,7 +26,7 @@
 > Build order strictly: Tier A → A-Compatible → B → C. Badge = battery actually passed (code, not prose).
 - [x] 2.1 Engine skeleton: lsengine CLI (spec/check/discover/sync/backfill/verify), JSON config/state I/O (atomic saves), JSONL event schema v1 in engine/internal/events (designed ONCE — envelope + 16 kinds + typed payloads); make check green (lint 0 issues, -race tests pass)
 - [x] 2.2 Connector SDK: sdk.Connector + FullLoader/IncrementalReader/ChangeStreamer facets, capability declarations enforced in code (ValidateCapabilities), presets for wire-compatible variants, registry; model (lake types incl. decimal, two-layer catalog + validation); state (chunk-set protocol, cursors, global CDC anchor, atomic persist). make check green.
-- [ ] 2.3 Postgres connector (Tier A): keyset-chunked full load + pgoutput CDC, resumable state, type-mapping table
+- [x] 2.3 Postgres connector (Tier A): CTID+keyset full load, incremental cursor, **pgoutput CDC** (ChangeStreamer: auto slot/publication, wal_level guard, ack-before-state slot discipline, TOAST-unavailable sentinel instead of silent null, resume). Unit tests + env-gated integration suite (`LAKESENSE_PG_IT=1`) green: check/discover, full-load exactly-once across chunks, incremental past-cursor, **end-to-end CDC insert/update/delete + resume**. make check 0 issues, -race clean.
 - [ ] 2.4 MySQL connector (Tier A): full load + binlog CDC (maintained Go binlog library)
 - [ ] 2.4b Family variants (A-Compatible): PG family (Aurora-PG, CockroachDB, TimescaleDB, AlloyDB, YugabyteDB), MySQL family (MariaDB, Aurora-MySQL, Percona, TiDB, Vitess) — presets, quirks, capability decls, smoke tests
 - [ ] 2.4c MongoDB connector (Tier B): _id-range full load, incremental, change-stream CDC + [BRAINSTORM] BSON→lake mapping
@@ -129,4 +129,4 @@
 - **2026-07-19 — No Temporal:** control plane = one Go binary + Postgres; lsengine as supervised child process; cron scheduling in-process with fake-clock-testable worker. Rationale in docs/analysis/control-plane.md §6.
 
 ## Next Action
-Phase 2.3: Postgres connector (Tier A) in engine/internal/connectors/postgres — pgx-based Setup/Check/Discover, CTID+keyset SplitChunks/ReadChunk, MaxCursor/ReadIncrement, pgoutput CDC per docs/analysis/postgres-connector.md; sync orchestrator in engine core wiring SDK→writers; wire CLI verbs to registry.
+Engine sync orchestrator (engine/internal/syncrun): drive registry connector through full-load (chunk plan + resume via state pkg) → incremental → CDC phases, emit JSONL v1 events (sync_started/stream_*/chunk_completed/state_advanced/sync_finished), write rows through a consumer-side Writer interface. Ship a built-in NDJSON writer as the interim default (Parquet lands in 2.5, same interface). Then wire CLI verbs (spec→registry schema, check/discover→connector, sync→orchestrator) replacing the stubs in internal/cli/cli.go; update cli_test.go. make check green + commit.
