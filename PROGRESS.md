@@ -39,7 +39,7 @@
 - [ ] 2.7 Checksum & count instrumentation + `lsengine verify` with PK-range bisection drill-down
 - [ ] 2.8 Backfill/point-in-time resync (PK range / time window / changed-since-T), state-safe + [BRAINSTORM] merge strategy
 - [ ] 2.9 Test harness: deploy/test-compose.yml, compose profiles, tiered batteries (A full / A-compat smoke / B / C), badge↔battery mapping in code
-- [ ] 2.10 Benchmarks: script + honest measured numbers in docs/BENCHMARKS.md
+- [x] 2.10 Benchmarks: scripts/benchmark.sh (`make bench`) — real full-load throughput (postgres + sqlite, configurable ROWS) from the engine's own sync_finished accounting; writes docs/BENCHMARKS.md with methodology + machine info. MEASURED (20-core box, 1M rows, NDJSON): sqlite ~98k rows/s / 37.7 MB/s, postgres ~93k rows/s / 36.4 MB/s (~5.9M rows/min). Honest: v0.1 reads chunks sequentially (parallel readers roadmap); numbers surfaced on the website with reproduce-it footnote, never borrowed.
 
 ## Phase 3 — Control Plane Spec & Scaffolding
 - [x] docs/SPEC.md — user story + acceptance criteria + MVP/v2 label per feature

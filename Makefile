@@ -3,7 +3,8 @@ GOLANGCI ?= $(shell command -v golangci-lint 2>/dev/null || echo $(HOME)/go/bin/
 GO_MODULES := engine backend
 # website target joins when scaffolded.
 
-.PHONY: check lint vet test build tidy frontend website verify verify-all
+.PHONY: check lint vet test build tidy frontend website verify verify-all bench release-check
+SRC ?= all
 
 LAKESENSE_URL ?= http://localhost:8080
 
@@ -19,6 +20,11 @@ verify:
 
 verify-all: check verify
 	bash scripts/verify-migration.sh all
+
+# bench: measure real full-load throughput (postgres + sqlite) and regenerate
+# docs/BENCHMARKS.md. Numbers are yours, measured on your hardware.
+bench:
+	bash scripts/benchmark.sh $(SRC)
 
 # release-check: clean-machine simulation — builds the whole product from the
 # committed tree only and proves the quickstart. Run before every tag (slow;

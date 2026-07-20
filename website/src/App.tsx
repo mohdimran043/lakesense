@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { shouldRenderScene } from "./scene/capabilities";
-import { Architecture, FAQ, Footer, PaywallBuster, Pricing, Problem, Showcase, Sources } from "./sections";
+import { Architecture, Benchmarks, FAQ, Footer, PaywallBuster, Pricing, Problem, Showcase, Sources } from "./sections";
 
 // Three.js is code-split so the initial bundle stays light; the canvas loads
 // after first paint, over the static poster.
@@ -81,6 +81,7 @@ export default function App() {
         <Problem />
         <PaywallBuster />
         <Showcase />
+        <Benchmarks />
         <Sources />
         <Architecture />
         <Pricing />

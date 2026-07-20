@@ -1,5 +1,90 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useReveal } from "./lib/useReveal";
+
+// CountUp animates a number from 0 → value once, when scrolled into view.
+// Respects reduced-motion (shows the final value immediately). It stops after
+// one run — no perpetual animation.
+function CountUp({ value, decimals = 0, prefix = "", suffix = "" }: { value: number; decimals?: number; prefix?: string; suffix?: string }) {
+  const [n, setN] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setN(value);
+      return;
+    }
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && !done.current) {
+          done.current = true;
+          const start = performance.now();
+          const dur = 1200;
+          const tick = (t: number) => {
+            const p = Math.min((t - start) / dur, 1);
+            const eased = 1 - Math.pow(1 - p, 3);
+            setN(value * eased);
+            if (p < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+          obs.unobserve(e.target);
+        }
+      }
+    }, { threshold: 0.4 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [value]);
+  return (
+    <span ref={ref} className="tnum">
+      {prefix}
+      {n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+      {suffix}
+    </span>
+  );
+}
+
+// ── Benchmarks (real, measured numbers) ─────────────────────────────────────
+export function Benchmarks() {
+  const ref = useReveal<HTMLElement>();
+  return (
+    <section id="benchmarks" ref={ref} className="reveal mx-auto max-w-6xl px-6 py-24">
+      <div className="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-aqua">Measured, not borrowed</div>
+      <h2 className="font-display text-3xl font-semibold md:text-4xl">
+        <span className="text-aqua">~5.9 million</span> rows a minute.
+      </h2>
+      <p className="mt-3 max-w-2xl text-muted">
+        A full-load migration of a 1,000,000-row table, timed by the engine's own
+        checksummed accounting. Your hardware, your numbers — reproduce every one.
+      </p>
+      <div className="mt-10 grid gap-4 sm:grid-cols-3">
+        <div className="glass rounded-2xl p-6">
+          <div className="text-3xl font-semibold text-aqua md:text-4xl">
+            <CountUp value={98278} suffix="" />
+          </div>
+          <div className="mt-1 text-sm text-muted">rows / second (SQLite full load)</div>
+        </div>
+        <div className="glass rounded-2xl p-6">
+          <div className="text-3xl font-semibold text-aqua md:text-4xl">
+            <CountUp value={37.7} decimals={1} suffix=" MB/s" />
+          </div>
+          <div className="mt-1 text-sm text-muted">sustained to disk, verified</div>
+        </div>
+        <div className="glass rounded-2xl p-6">
+          <div className="text-3xl font-semibold text-aqua md:text-4xl">
+            <CountUp value={10.2} decimals={1} suffix="s" />
+          </div>
+          <div className="mt-1 text-sm text-muted">to migrate 1M rows end-to-end</div>
+        </div>
+      </div>
+      <p className="mt-6 font-mono text-xs text-faint">
+        Measured on a 20-core box, NDJSON writer, keyset-chunked · reproduce with
+        <span className="text-muted"> scripts/benchmark.sh</span> · Parquet + parallel
+        readers (v0.2) go faster. We never cite anyone else's benchmarks as ours.
+      </p>
+    </section>
+  );
+}
 
 function Section({ id, children, className = "" }: { id?: string; children: ReactNode; className?: string }) {
   const ref = useReveal<HTMLElement>();

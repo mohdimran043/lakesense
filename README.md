@@ -63,6 +63,11 @@ Prefer the API? `curl localhost:8080/api/v1/pipelines`. Prefer proof?
 `make verify` runs an end-to-end migration-correctness check (source/destination
 checksums must match) plus a whole-product feature proof.
 
+**Benchmarks are yours, measured.** `make bench` migrates a 1M-row table and
+reports rows/s and MB/s from the engine's own accounting — ~5.9M rows/min on a
+20-core box (NDJSON writer; see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)). We
+never cite anyone else's numbers as ours.
+
 ## Create & run a pipeline
 
 > **Status:** today pipelines are created and run through the **engine CLI**
