@@ -7,11 +7,13 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,16 +21,66 @@ import (
 
 	"github.com/lakesense/lakesense/backend/internal/api"
 	"github.com/lakesense/lakesense/backend/internal/config"
+	"github.com/lakesense/lakesense/backend/internal/seed"
 	"github.com/lakesense/lakesense/backend/internal/store"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	if err := run(logger); err != nil {
+	// Subcommands: `serve` (default) runs the API + workers; `seed` populates
+	// demo data through the real ingestion path.
+	args := os.Args[1:]
+	cmd := "serve"
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		cmd, args = args[0], args[1:]
+	}
+
+	var err error
+	switch cmd {
+	case "serve":
+		err = run(logger)
+	case "seed":
+		err = runSeed(logger, args)
+	default:
+		fmt.Fprintf(os.Stderr, "lakesense: unknown command %q (want: serve | seed)\n", cmd)
+		os.Exit(2)
+	}
+	if err != nil {
 		logger.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+}
+
+// runSeed applies migrations (so a fresh DB works) and seeds demo history.
+func runSeed(logger *slog.Logger, args []string) error {
+	fs := flag.NewFlagSet("seed", flag.ContinueOnError)
+	days := fs.Int("days", 14, "days of synthetic history to generate")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := store.Migrate(cfg.DatabaseURL); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	st, err := store.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	defer st.Close()
+
+	logger.Info("seeding demo data", "days", *days)
+	if err := seed.Run(ctx, st.Pool, *days); err != nil {
+		return fmt.Errorf("seed: %w", err)
+	}
+	logger.Info("seed complete")
+	return nil
 }
 
 func run(logger *slog.Logger) error {

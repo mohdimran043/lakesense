@@ -48,7 +48,7 @@
 - [x] Scaffold Go backend: cmd/lakesense (errgroup workers + graceful shutdown), internal/{config,store,api,buildinfo}; chi router w/ healthz/readyz/version; golang-migrate embedded runner; deploy/.env.example. Verified live: migrate → serve → healthz/readyz/version 200. backend added to `make check` (lint 0, vet, -race). [ ] React frontend scaffold still pending.
 
 ## Phase 4 — Core Platform (strict numbered order)
-- [ ] 4.1 Event Collector + demo/seed mode (multi-day simulated event stream)
+- [x] 4.1 Event Collector + demo/seed mode. Collector (backend/internal/collector): consumer-side event envelope (decoupled from engine module), Ingester parses JSONL → lands raw `events` + derives `metrics` (sync_finished), `diff_runs` (pairs source/dest checksum_computed → match badge), `lineage_edges` (column_mapping), pipeline last_sync; tolerates malformed lines; narrow Sink interface (fake-tested, 4 cases) + PgSink. Seed (`lakesense seed --days N`): synthesizes multi-day history (healthy/slowdown/volume-drop/failure/schema-change/mismatch) through the REAL ingestion path. Verified vs postgres:16: 3 pipelines, 478 events, 39 metrics, 52 diff_runs (48 verified/4 mismatched), 17 lineage edges, 3 failures, 4 schema changes. make check green.
 - [ ] 4.2 Notification Rule Engine (conditions, severity, dedup, rate limit, quiet hours, maintenance windows)
 - [ ] 4.3 Channel adapters: Slack, Telegram, SMTP, generic webhook behind `Notifier` interface
 - [ ] 4.4 Escalation policies & on-call schedules (state machine worker, fake-clock tested, ack/snooze/resolve UI + chat buttons)
