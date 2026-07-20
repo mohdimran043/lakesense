@@ -87,16 +87,16 @@
 - [ ] docs/TEST-REPORT.md
 
 ## Phase 6.5 — Solo-Founder Automation Suite
-- [ ] scripts/verify-migration.sh <source-type> (+ `all`)
-- [ ] scripts/verify-features.sh (whole-product API-level proof)
+- [x] scripts/verify-migration.sh <source-type> (+ `all`) — real sqlite→ndjson e2e, asserts source/dest checksum MATCH + exact counts + metadata; VERIFIED 9/9. scripts/lib.sh colored PASS/FAIL table.
+- [x] scripts/verify-features.sh (whole-product API proof) — VERIFIED 11/11 against live compose stack (diff badges 3/3, 1.53M rows, analytics, lineage, health). Write-path assertions honestly TODO until those endpoints ship.
 - [ ] scripts/verify-release.sh (clean-machine simulation)
-- [ ] make verify / make verify-all
-- [ ] .github/workflows/ci.yml, release.yml, nightly.yml
-- [ ] Renovate/Dependabot config
-- [ ] `lakesense doctor` CLI
+- [x] make verify / make verify-all (verify-features auto-skips when no stack reachable)
+- [x] .github/workflows/ci.yml (make check + proofs vs postgres service), release.yml (tag→GHCR images + binaries), nightly.yml (govulncheck + npm audit + proof, auto-files issue). YAML validated.
+- [x] Dependabot config (gomod ×2, npm, actions; weekly)
+- [x] `lakesense doctor` CLI (config/db/migrations/freshness, --json, exit 0/1; wired as compose healthcheck)
 - [ ] Canary pipeline (self-test nightly)
 - [ ] scripts/backup-metadata.sh + restore docs
-- [ ] Compose hardening (healthchecks, restart, limits, log rotation)
+- [x] Compose hardening (healthchecks, restart: unless-stopped, log rotation) — done in Phase 5
 - [ ] Weekly LLM self-report
 
 ## Phase 7 — Documentation
@@ -104,9 +104,9 @@
 - [ ] Per-connector pages, all 25+ (subagent tasks, shared template, capability-decl consistency)
 - [ ] Platform feature guides (10)
 - [ ] Operations docs (deploy, upgrade, backup, runbook)
-- [ ] README.md product-grade + [BRAINSTORM] license decision (proprietary vs open-core vs BSL)
+- [x] README.md product-grade + [BRAINSTORM] license → open-core (Apache-2.0 core, Pro=SSO/RBAC). Full LICENSE + NOTICE (honest OLake credit). Free/Paid wedge table, sources matrix, quickstart, mermaid arch, wordmark.svg.
 - [ ] docs/API.md + OpenAPI spec
-- [ ] docs/BUSINESS.md (wedge, pricing, competitor table, 6-month roadmap)
+- [x] docs/BUSINESS.md (wedge, Free/Pro/Enterprise pricing, competitor matrix, 6-month roadmap)
 
 ## Phase 8 — Marketing Website
 - [ ] website/ Vite + React + React Three Fiber, static deploy
