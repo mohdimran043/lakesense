@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/lakesense/lakesense/engine/internal/model"
 	"github.com/lakesense/lakesense/engine/internal/sdk"
@@ -110,6 +111,16 @@ func (d *digest) Hex() string {
 // values) so verify can compute a source row's id the same way the writer did
 // for the destination — the two sides only line up if the id function is shared.
 func RecordID(row sdk.Row, pk []string) string { return recordID(row, pk) }
+
+// InjectMetadata stamps the engine-owned _ls_ columns on a row: a stable record
+// id from the primary key, the ingestion timestamp, and the op type. The runner
+// uses it for sync rows and the backfill op uses it for merge corrections —
+// one implementation so the id/timestamp shape can never drift between paths.
+func InjectMetadata(row sdk.Row, pk []string, op string, now time.Time) {
+	row[model.ColRecordID] = recordID(row, pk)
+	row[model.ColIngestedAt] = now.UTC().Format(time.RFC3339Nano)
+	row[model.ColOpType] = op
+}
 
 // HashDataColumns hashes a row over the given data columns (empty = all
 // non-metadata columns). Exported so verify and backfill compute digests

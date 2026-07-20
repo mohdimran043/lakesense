@@ -17,8 +17,10 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/lakesense/lakesense/engine/internal/backfill"
 	"github.com/lakesense/lakesense/engine/internal/buildinfo"
 	"github.com/lakesense/lakesense/engine/internal/config"
 	"github.com/lakesense/lakesense/engine/internal/connectors"
@@ -71,7 +73,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "sync":
 		err = runSync(ctx, rest, stdout)
 	case "backfill":
-		err = runStub(ctx, "backfill", rest, stdout)
+		err = runBackfill(ctx, rest, stdout)
 	case "verify":
 		err = runVerify(ctx, rest, stdout)
 	case "version":
@@ -293,6 +295,102 @@ func runVerify(ctx context.Context, args []string, stdout io.Writer) error {
 	return nil
 }
 
+// runBackfill re-syncs a bounded slice of one stream and merges it into the
+// destination without a full reload, never touching sync/CDC state. It closes
+// by verifying the stream; a non-matching close returns a non-zero exit.
+func runBackfill(ctx context.Context, args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("backfill", flag.ContinueOnError)
+	var cf commonFlags
+	cf.register(fs)
+	streamID := fs.String("stream", "", "target stream ns.name (required)")
+	pkMin := fs.String("pk-min", "", "inclusive PK/rowid range lower bound")
+	pkMax := fs.String("pk-max", "", "exclusive PK/rowid range upper bound")
+	since := fs.String("since", "", "changed-since window as field=value")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
+	if cf.config == "" || cf.catalog == "" || cf.destination == "" || *streamID == "" {
+		return fmt.Errorf("backfill requires --config, --catalog, --destination, and --stream")
+	}
+	sinceField, sinceValue, err := splitSince(*since)
+	if err != nil {
+		return err
+	}
+
+	em := events.NewEmitter(stdout, events.NewSyncID(), cf.pipelineID)
+	if err := em.Emit(events.KindEngineInfo, "", events.EngineInfo{Version: buildinfo.Version, Command: "backfill"}); err != nil {
+		return err
+	}
+	c, _, err := openConnector(ctx, cf)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = c.Close(ctx) }()
+
+	var cat model.Catalog
+	if err := config.LoadJSON(cf.catalog, &cat); err != nil {
+		return err
+	}
+	stream, ok := cat.Stream(*streamID)
+	if !ok {
+		return fmt.Errorf("stream %s not found in catalog", *streamID)
+	}
+	sel := selectionFor(cat, *streamID)
+
+	destCfg, err := loadDestination(cf.destination)
+	if err != nil {
+		return err
+	}
+	writer, err := syncrun.OpenWriter(destCfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = writer.Close(ctx) }()
+	reader, err := syncrun.OpenReader(destCfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = reader.Close(ctx) }()
+
+	res, err := backfill.Run(ctx, backfill.Options{
+		Connector: c, Writer: writer, Reader: reader,
+		Stream: stream, Selection: sel, Emitter: em,
+		PKMin: *pkMin, PKMax: *pkMax, SinceField: sinceField, SinceValue: sinceValue,
+	})
+	if err != nil {
+		return err
+	}
+	if !res.Match {
+		return fmt.Errorf("backfill: stream %s did not reconcile with source after merge", *streamID)
+	}
+	return nil
+}
+
+// selectionFor returns the user's selection for a stream, or a full-load default
+// when the catalog has no explicit selection for it.
+func selectionFor(cat model.Catalog, id string) model.SelectedStream {
+	for _, s := range cat.Selected {
+		if s.ID() == id {
+			return s
+		}
+	}
+	stream, _ := cat.Stream(id)
+	return model.SelectedStream{Namespace: stream.Namespace, Name: stream.Name, Mode: model.ModeFullLoad}
+}
+
+// splitSince parses a "field=value" backfill window, or returns empties when the
+// flag is unset.
+func splitSince(s string) (field, value string, err error) {
+	if s == "" {
+		return "", "", nil
+	}
+	i := strings.IndexByte(s, '=')
+	if i <= 0 {
+		return "", "", fmt.Errorf("--since must be field=value, got %q", s)
+	}
+	return s[:i], s[i+1:], nil
+}
+
 // loadDestination reads and decodes a destination config document from disk.
 func loadDestination(path string) (syncrun.DestinationConfig, error) {
 	raw, err := os.ReadFile(path)
@@ -365,22 +463,4 @@ func writeJSON(w io.Writer, v any) error {
 		return fmt.Errorf("encode output: %w", err)
 	}
 	return nil
-}
-
-// runStub is the placeholder for data-path commands whose full implementation
-// lands in a later Phase 2 milestone (backfill → 2.8, verify → 2.7). It
-// validates flags, emits engine_info, and reports not-implemented.
-func runStub(_ context.Context, name string, args []string, stdout io.Writer) error {
-	cf, err := parseCommon(name, args)
-	if err != nil {
-		return err
-	}
-	em := events.NewEmitter(stdout, events.NewSyncID(), cf.pipelineID)
-	if err := em.Emit(events.KindEngineInfo, "", events.EngineInfo{
-		Version: buildinfo.Version,
-		Command: name,
-	}); err != nil {
-		return err
-	}
-	return fmt.Errorf("%s is not implemented yet (Phase 2 milestone pending)", name)
 }

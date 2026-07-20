@@ -98,3 +98,54 @@ func TestVerifyMatchesAfterParquetSync(t *testing.T) {
 	}
 	require.True(t, found, "expected a verify_result event")
 }
+
+// verifyCode runs verify and returns its exit code.
+func verifyCode(t *testing.T, src, dest, cat string) int {
+	t.Helper()
+	var o, e bytes.Buffer
+	return Run([]string{"verify", "--config", src, "--destination", dest, "--catalog", cat}, &o, &e)
+}
+
+// TestBackfillRestoresCorruptedWindow proves the full repair loop: sync, corrupt
+// the destination (drop a part-file), verify fails, backfill the range, verify
+// passes — and a state file handed to backfill is untouched (state-safety).
+func TestBackfillRestoresCorruptedWindow(t *testing.T) {
+	work := t.TempDir()
+	dbPath := seedSQLite(t, map[int64]string{1: "a", 2: "b", 3: "c"})
+	outDir := filepath.Join(work, "out")
+
+	srcPath := writeJSONFile(t, work, "src.json", map[string]any{"type": "sqlite", "path": dbPath})
+	destPath := writeJSONFile(t, work, "dest.json", map[string]any{"type": "parquet", "path": outDir})
+	catPath := writeJSONFile(t, work, "catalog.json", itemsCatalog())
+	statePath := filepath.Join(work, "state.json")
+
+	// Sync, then confirm it verifies clean.
+	var so, se bytes.Buffer
+	require.Equal(t, 0, Run([]string{"sync", "--config", srcPath, "--destination", destPath, "--catalog", catPath, "--state", statePath}, &so, &se), se.String())
+	require.Equal(t, 0, verifyCode(t, srcPath, destPath, catPath))
+
+	// Corrupt the destination: delete its part-files (data loss).
+	parts, _ := filepath.Glob(filepath.Join(outDir, "main.items", "*.parquet"))
+	require.NotEmpty(t, parts)
+	for _, p := range parts {
+		require.NoError(t, os.Remove(p))
+	}
+	require.Equal(t, 1, verifyCode(t, srcPath, destPath, catPath), "verify must fail on a corrupted destination")
+
+	// A state file backfill must not touch (state-safety proof).
+	bfState := filepath.Join(work, "bf-state.json")
+	require.NoError(t, os.WriteFile(bfState, []byte(`{"version":1,"global":{"position":{"lsn":"0/DEADBEEF"}}}`), 0o600))
+	before, err := os.ReadFile(bfState)
+	require.NoError(t, err)
+
+	// Backfill the whole rowid range and verify it repairs the destination.
+	var bo, be bytes.Buffer
+	code := Run([]string{"backfill", "--config", srcPath, "--destination", destPath, "--catalog", catPath,
+		"--stream", "main.items", "--state", bfState}, &bo, &be)
+	require.Equal(t, 0, code, "backfill stderr: %s", be.String())
+	require.Equal(t, 0, verifyCode(t, srcPath, destPath, catPath), "verify must pass after backfill")
+
+	after, err := os.ReadFile(bfState)
+	require.NoError(t, err)
+	require.Equal(t, before, after, "backfill must never mutate sync/CDC state")
+}
