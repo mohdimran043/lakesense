@@ -1,0 +1,16 @@
+LakeSense
+Copyright 2026 LakeSense
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+LakeSense's replication-engine architecture was informed by studying
+open-source projects including OLake (Apache 2.0,
+https://github.com/datazip-inc/olake). LakeSense is a clean reimplementation:
+no OLake source code is copied or derived. Benchmark numbers, where published,
+are LakeSense's own measurements — never OLake's.
+
+Open-core model: everything in this repository is free and open under Apache
+2.0, including the features other vendors reserve for paid tiers (data-diff
+validation, escalation/on-call, audit logs, cost analytics, lineage, quality
+monitors, config versioning, environments, backfills). SSO/RBAC and compliance
+packs are reserved for a future LakeSense Pro tier.

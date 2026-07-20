@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" width="420" height="96" role="img" aria-label="LakeSense">
+  <defs>
+    <linearGradient id="aqua" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2EE6D6"/>
+      <stop offset="1" stop-color="#20968C"/>
+    </linearGradient>
+  </defs>
+  <!-- sonar glyph: concentric soundings over a waterline -->
+  <g transform="translate(48 48)" fill="none" stroke="url(#aqua)" stroke-width="4" stroke-linecap="round">
+    <path d="M-26 6 q13 -12 26 0 t26 0" opacity="0.5"/>
+    <path d="M-20 -2 q10 -16 20 0 t20 0" opacity="0.8"/>
+    <circle cx="0" cy="-10" r="3.5" fill="#2EE6D6" stroke="none"/>
+  </g>
+  <text x="88" y="60" font-family="'Space Grotesk','Segoe UI',system-ui,sans-serif" font-size="42" font-weight="600" letter-spacing="-1">
+    <tspan fill="#E6EDF0">Lake</tspan><tspan fill="#2EE6D6">Sense</tspan>
+  </text>
+</svg>
