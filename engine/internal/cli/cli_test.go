@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/lakesense/lakesense/engine/internal/events"
+	"github.com/lakesense/lakesense/engine/internal/sdk"
 )
 
 func TestRunDispatch(t *testing.T) {
@@ -30,9 +31,12 @@ func TestRunDispatch(t *testing.T) {
 		{name: "version", args: []string{"version"}, wantCode: 0, wantOut: "dev"},
 		{name: "help", args: []string{"help"}, wantCode: 0, wantOut: "Commands"},
 		{name: "spec requires connector", args: []string{"spec"}, wantCode: 1, wantErr: "--connector is required"},
+		{name: "spec unknown connector", args: []string{"spec", "--connector", "nope"}, wantCode: 1, wantErr: "unknown connector"},
 		{name: "sync requires config", args: []string{"sync"}, wantCode: 1, wantErr: "--config is required"},
 		{name: "sync missing config file", args: []string{"sync", "--config", "/nonexistent.json"}, wantCode: 1, wantErr: "config file"},
-		{name: "sync stub reports pending", args: []string{"sync", "--config", cfgPath}, wantCode: 1, wantErr: "not implemented"},
+		{name: "sync needs connector type", args: []string{"sync", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
+		{name: "discover needs connector type", args: []string{"discover", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
+		{name: "backfill stub pending", args: []string{"backfill", "--config", cfgPath}, wantCode: 1, wantErr: "not implemented"},
 	}
 
 	for _, tt := range tests {
@@ -50,12 +54,30 @@ func TestRunDispatch(t *testing.T) {
 	}
 }
 
-func TestSyncStubEmitsEngineInfoEvent(t *testing.T) {
+// TestSpecEmitsConnectorSchema proves spec prints a real connector's Spec as a
+// JSON document (not events) and that it works without connecting.
+func TestSpecEmitsConnectorSchema(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"spec", "--connector", "postgres"}, &stdout, &stderr)
+	require.Equal(t, 0, code, "stderr: %s", stderr.String())
+
+	var spec sdk.Spec
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &spec))
+	assert.Equal(t, "postgres", spec.Type)
+	assert.Contains(t, spec.Capabilities, sdk.CapFullLoad)
+	assert.NotEmpty(t, spec.ConfigSchema)
+}
+
+// TestSyncEmitsEngineInfoEvent proves sync emits engine_info as its first line
+// even when the run later fails (here: a bare config with no connector type),
+// so a run is always identifiable in the event stream.
+func TestSyncEmitsEngineInfoEvent(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(`{}`), 0o600))
 
 	var stdout, stderr bytes.Buffer
-	Run([]string{"sync", "--config", cfgPath, "--pipeline-id", "p1"}, &stdout, &stderr)
+	code := Run([]string{"sync", "--config", cfgPath, "--pipeline-id", "p1"}, &stdout, &stderr)
+	require.Equal(t, 1, code) // no connector type resolvable from {}
 
 	first := strings.SplitN(stdout.String(), "\n", 2)[0]
 	var e events.Event

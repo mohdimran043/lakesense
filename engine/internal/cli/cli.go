@@ -4,10 +4,14 @@
 // File-based I/O contract (docs/analysis/engine-protocol.md §1): configs and
 // catalogs come in as JSON file paths; progress and results are emitted as
 // JSONL events on stdout; state is rewritten atomically as sync progresses.
+// Command output shapes differ by consumer: spec and discover print a single
+// JSON document (schema / catalog), check prints a human status line, and the
+// data-path commands (sync/backfill/verify) emit the JSONL event stream.
 package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -16,11 +20,18 @@ import (
 	"syscall"
 
 	"github.com/lakesense/lakesense/engine/internal/buildinfo"
+	"github.com/lakesense/lakesense/engine/internal/config"
+	"github.com/lakesense/lakesense/engine/internal/connectors"
 	"github.com/lakesense/lakesense/engine/internal/events"
+	"github.com/lakesense/lakesense/engine/internal/model"
+	"github.com/lakesense/lakesense/engine/internal/sdk"
+	"github.com/lakesense/lakesense/engine/internal/state"
+	"github.com/lakesense/lakesense/engine/internal/syncrun"
 )
 
 // commonFlags holds the flags shared by data-path commands.
 type commonFlags struct {
+	connector   string
 	config      string
 	destination string
 	catalog     string
@@ -29,6 +40,7 @@ type commonFlags struct {
 }
 
 func (c *commonFlags) register(fs *flag.FlagSet) {
+	fs.StringVar(&c.connector, "connector", "", "connector type (defaults to the config's \"type\" field)")
 	fs.StringVar(&c.config, "config", "", "path to source config JSON (required)")
 	fs.StringVar(&c.destination, "destination", "", "path to destination config JSON")
 	fs.StringVar(&c.catalog, "catalog", "", "path to stream catalog JSON")
@@ -52,11 +64,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "spec":
 		err = runSpec(ctx, rest, stdout)
 	case "check":
-		err = runStub(ctx, "check", rest, stdout)
+		err = runCheck(ctx, rest, stdout)
 	case "discover":
-		err = runStub(ctx, "discover", rest, stdout)
+		err = runDiscover(ctx, rest, stdout)
 	case "sync":
-		err = runStub(ctx, "sync", rest, stdout)
+		err = runSync(ctx, rest, stdout)
 	case "backfill":
 		err = runStub(ctx, "backfill", rest, stdout)
 	case "verify":
@@ -94,9 +106,10 @@ Commands:
 `)
 }
 
-// runSpec emits connector config schemas. Connector registry lands in Phase
-// 2.2; until then it reports the engine's own capabilities envelope.
-func runSpec(_ context.Context, args []string, _ io.Writer) error {
+// runSpec emits a connector's Spec (identity, capabilities, config schema) as a
+// JSON document — the surface a UI renders a source form from. Spec must work
+// without connecting, so no Setup is performed.
+func runSpec(_ context.Context, args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("spec", flag.ContinueOnError)
 	connector := fs.String("connector", "", "connector type (required)")
 	if err := fs.Parse(args); err != nil {
@@ -105,26 +118,189 @@ func runSpec(_ context.Context, args []string, _ io.Writer) error {
 	if *connector == "" {
 		return fmt.Errorf("--connector is required")
 	}
-	return fmt.Errorf("connector %q is not registered yet (connector SDK arrives in the next milestone)", *connector)
+	c, err := connectors.Default().New(*connector)
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, c.Spec())
 }
 
-// runStub is the Phase 2.1 placeholder for data-path commands: it validates
-// flags, emits the engine_info event, and reports not-implemented. Each
-// command is replaced by its real implementation in later Phase 2 milestones.
-func runStub(_ context.Context, name string, args []string, stdout io.Writer) error {
+// runCheck validates connectivity and source-side prerequisites, printing a
+// human status line on success and an actionable error otherwise.
+func runCheck(ctx context.Context, args []string, stdout io.Writer) error {
+	cf, err := parseCommon("check", args)
+	if err != nil {
+		return err
+	}
+	c, typ, err := openConnector(ctx, cf)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = c.Close(ctx) }()
+	if err := c.Check(ctx); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "check ok: %s connection and prerequisites verified\n", typ)
+	return nil
+}
+
+// runDiscover lists streams with schemas and supported modes, emitting the full
+// catalog as a JSON document (discover layer 1). User selections are added by
+// the caller before sync.
+func runDiscover(ctx context.Context, args []string, stdout io.Writer) error {
+	cf, err := parseCommon("discover", args)
+	if err != nil {
+		return err
+	}
+	c, _, err := openConnector(ctx, cf)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = c.Close(ctx) }()
+	streams, err := c.Discover(ctx)
+	if err != nil {
+		return fmt.Errorf("discover: %w", err)
+	}
+	return writeJSON(stdout, model.Catalog{Streams: streams})
+}
+
+// runSync drives the orchestrator: engine_info first (so a run is always
+// identifiable even if setup fails), then connector setup, catalog/destination
+// resolution, and the full-load → incremental → CDC flow, streaming JSONL
+// events on stdout throughout.
+func runSync(ctx context.Context, args []string, stdout io.Writer) error {
+	cf, err := parseCommon("sync", args)
+	if err != nil {
+		return err
+	}
+
+	em := events.NewEmitter(stdout, events.NewSyncID(), cf.pipelineID)
+	if err := em.Emit(events.KindEngineInfo, "", events.EngineInfo{
+		Version: buildinfo.Version, Command: "sync",
+	}); err != nil {
+		return err
+	}
+
+	c, typ, err := openConnector(ctx, cf)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = c.Close(ctx) }()
+
+	if cf.catalog == "" {
+		return fmt.Errorf("--catalog is required for sync")
+	}
+	var cat model.Catalog
+	if err := config.LoadJSON(cf.catalog, &cat); err != nil {
+		return err
+	}
+
+	if cf.destination == "" {
+		return fmt.Errorf("--destination is required for sync")
+	}
+	destRaw, err := os.ReadFile(cf.destination)
+	if err != nil {
+		return fmt.Errorf("read destination config: %w", err)
+	}
+	destCfg, err := syncrun.LoadDestinationConfig(destRaw)
+	if err != nil {
+		return err
+	}
+	w, err := syncrun.OpenWriter(destCfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = w.Close(ctx) }()
+
+	st, err := loadState(cf.state)
+	if err != nil {
+		return err
+	}
+
+	return syncrun.Run(ctx, syncrun.Options{
+		Connector:       c,
+		Writer:          w,
+		Catalog:         cat,
+		State:           st,
+		Emitter:         em,
+		ConnectorType:   typ,
+		DestinationType: destCfg.Type,
+	})
+}
+
+// parseCommon parses the shared data-path flags and enforces the config path.
+func parseCommon(name string, args []string) (commonFlags, error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	var cf commonFlags
 	cf.register(fs)
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("parse flags: %w", err)
+		return cf, fmt.Errorf("parse flags: %w", err)
 	}
 	if cf.config == "" {
-		return fmt.Errorf("--config is required")
+		return cf, fmt.Errorf("--config is required")
 	}
 	if _, err := os.Stat(cf.config); err != nil {
-		return fmt.Errorf("config file: %w", err)
+		return cf, fmt.Errorf("config file: %w", err)
 	}
+	return cf, nil
+}
 
+// openConnector resolves the connector type (explicit flag or the config's
+// "type" field), instantiates it from the default registry, and connects.
+func openConnector(ctx context.Context, cf commonFlags) (sdk.Connector, string, error) {
+	raw, err := os.ReadFile(cf.config)
+	if err != nil {
+		return nil, "", fmt.Errorf("read config: %w", err)
+	}
+	typ := cf.connector
+	if typ == "" {
+		var probe struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(raw, &probe) // best-effort; validated below
+		typ = probe.Type
+	}
+	if typ == "" {
+		return nil, "", fmt.Errorf("connector type required: pass --connector or set a \"type\" field in the source config")
+	}
+	c, err := connectors.Default().New(typ)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := c.Setup(ctx, raw); err != nil {
+		_ = c.Close(ctx)
+		return nil, "", fmt.Errorf("setup %s: %w", typ, err)
+	}
+	return c, typ, nil
+}
+
+// loadState opens the state file for resumable progress, or an in-memory
+// document when no path is given (a fresh, non-resumable run).
+func loadState(path string) (*state.Document, error) {
+	if path == "" {
+		return state.NewInMemory(), nil
+	}
+	return state.Load(path)
+}
+
+// writeJSON encodes v as an indented JSON document.
+func writeJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("encode output: %w", err)
+	}
+	return nil
+}
+
+// runStub is the placeholder for data-path commands whose full implementation
+// lands in a later Phase 2 milestone (backfill → 2.8, verify → 2.7). It
+// validates flags, emits engine_info, and reports not-implemented.
+func runStub(_ context.Context, name string, args []string, stdout io.Writer) error {
+	cf, err := parseCommon(name, args)
+	if err != nil {
+		return err
+	}
 	em := events.NewEmitter(stdout, events.NewSyncID(), cf.pipelineID)
 	if err := em.Emit(events.KindEngineInfo, "", events.EngineInfo{
 		Version: buildinfo.Version,
