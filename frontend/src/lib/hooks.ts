@@ -1,0 +1,19 @@
+import { useQuery } from "@tanstack/react-query";
+import { api } from "./api";
+
+// Thin query hooks. The API is read-only demo data today, so a 30s stale time
+// keeps the live-feel without hammering the backend.
+const opts = { staleTime: 30_000 };
+
+export const usePipelines = () => useQuery({ queryKey: ["pipelines"], queryFn: api.pipelines, ...opts });
+export const usePipeline = (id: number) =>
+  useQuery({ queryKey: ["pipeline", id], queryFn: () => api.pipeline(id), ...opts });
+export const useMetrics = (id: number) =>
+  useQuery({ queryKey: ["metrics", id], queryFn: () => api.metrics(id), ...opts });
+export const useDiffs = (id: number) =>
+  useQuery({ queryKey: ["diffs", id], queryFn: () => api.diffs(id), ...opts });
+export const useLineage = (id: number) =>
+  useQuery({ queryKey: ["lineage", id], queryFn: () => api.lineage(id), ...opts });
+export const useIncidents = () => useQuery({ queryKey: ["incidents"], queryFn: api.incidents, ...opts });
+export const useAnalytics = () => useQuery({ queryKey: ["analytics"], queryFn: api.analytics, ...opts });
+export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit, ...opts });

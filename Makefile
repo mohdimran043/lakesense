@@ -1,11 +1,21 @@
 GOLANGCI ?= $(shell command -v golangci-lint 2>/dev/null || echo $(HOME)/go/bin/golangci-lint)
 
 GO_MODULES := engine backend
-# frontend/website targets join when scaffolded.
+# website target joins when scaffolded.
 
-.PHONY: check lint vet test build tidy
+.PHONY: check lint vet test build tidy frontend
 
-check: lint vet test ## lint + vet + tests for everything — must pass before any phase completes
+check: lint vet test frontend ## lint + vet + tests + frontend build — must pass before any phase completes
+
+# Frontend: lint + strict typecheck + production build. Skipped gracefully if
+# deps aren't installed (run `cd frontend && npm install` first).
+frontend:
+	@if [ -d frontend/node_modules ]; then \
+		echo "== frontend build"; \
+		(cd frontend && npm run lint && npm run build) || exit 1; \
+	else \
+		echo "== frontend skipped (run: cd frontend && npm install)"; \
+	fi
 
 lint:
 	@for m in $(GO_MODULES); do \

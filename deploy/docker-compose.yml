@@ -1,13 +1,12 @@
-# LakeSense one-command stack: Postgres (metadata) + control plane.
-# The frontend service joins here once the React app is built (Phase 4.16);
-# until then the API is reachable directly on :8080 and the seeded demo data
-# makes every endpoint explorable.
+# LakeSense one-command stack: Postgres (metadata) + control plane + dashboard.
+# nginx serves the built dashboard and proxies /api to the backend.
 #
 # Usage:
 #   cp .env.example .env      # then edit if desired
-#   docker compose up -d      # migrations run on start
+#   docker compose up -d      # builds images, runs migrations on start
 #   docker compose run --rm backend seed --days 14   # demo data (entrypoint is lakesense)
-#   curl localhost:8080/api/v1/pipelines
+#   open http://localhost:3000       # the dashboard
+#   curl localhost:8080/api/v1/pipelines   # the API directly
 #
 # ZERO runtime dependency on reference/ — images build only from engine/ and
 # backend/ sources.
@@ -57,6 +56,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${LAKESENSE_UI_PORT:-3000}:80"
     logging:
       driver: json-file
       options:

@@ -1,0 +1,108 @@
+/* Self-hosted variable fonts — deliberately not Inter/Roboto. */
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Design tokens — "abyssal depth-sounder".
+   Dark is the default (engineers live here); light is a variable swap.
+   Colors are space-separated RGB channels so Tailwind's <alpha-value> works.
+--------------------------------------------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  --bg: 9 15 19; /* abyssal, teal-tinted near-black */
+  --surface: 15 23 28;
+  --raised: 19 30 36; /* raised cards */
+  --line: 31 45 52; /* hairline */
+  --text: 230 237 240; /* cool white */
+  --muted: 138 160 168; /* secondary */
+  --faint: 92 112 120; /* tertiary / captions */
+  --signal: 46 230 214; /* luminous aqua — the sonar signal */
+  --signal-dim: 32 150 140;
+  --warn: 245 184 76; /* amber */
+  --danger: 255 107 93; /* coral */
+  --info: 107 168 196; /* muted depth-blue */
+}
+
+:root[data-theme="light"] {
+  --bg: 240 244 245;
+  --surface: 255 255 255;
+  --raised: 255 255 255;
+  --line: 216 224 227;
+  --text: 16 32 38;
+  --muted: 78 100 108;
+  --faint: 120 140 148;
+  --signal: 13 148 136;
+  --signal-dim: 90 190 182;
+  --warn: 180 120 20;
+  --danger: 210 66 52;
+  --info: 46 110 140;
+}
+
+* {
+  border-color: rgb(var(--line));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-family: "Geist Variable", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv01", "ss01";
+}
+
+/* Instrument readout: tabular monospace numerals for all data. */
+.tnum {
+  font-family: "Geist Mono Variable", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Faint sonar-grid backdrop for the app canvas — depth without noise. */
+.depth-grid {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgb(var(--signal) / 0.06), transparent 60%),
+    linear-gradient(rgb(var(--line) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--line) / 0.35) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 6px;
+  border: 2px solid rgb(var(--bg));
+}
+::selection {
+  background: rgb(var(--signal) / 0.28);
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--signal));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
