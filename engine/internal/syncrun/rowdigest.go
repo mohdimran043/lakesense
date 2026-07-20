@@ -106,6 +106,36 @@ func (d *digest) Hex() string {
 	return fmt.Sprintf("%016x", d.sum)
 }
 
+// RecordID exposes the destination merge key (stable hash of the primary-key
+// values) so verify can compute a source row's id the same way the writer did
+// for the destination — the two sides only line up if the id function is shared.
+func RecordID(row sdk.Row, pk []string) string { return recordID(row, pk) }
+
+// HashDataColumns hashes a row over the given data columns (empty = all
+// non-metadata columns). Exported so verify and backfill compute digests
+// identically to the writer — one hash function, no drift.
+func HashDataColumns(row sdk.Row, columns []string) (uint64, error) {
+	return hashRow(row, columns)
+}
+
+// DataColumns returns a stream's non-metadata column names in schema order
+// (exported wrapper of dataColumns).
+func DataColumns(s model.Stream) []string { return dataColumns(s) }
+
+// AggregateDigest is the exported, order-independent aggregate verify uses for
+// per-range and whole-stream sums. It wraps the same digest the writer folds
+// row hashes into.
+type AggregateDigest struct{ d digest }
+
+// Add folds one row hash into the aggregate.
+func (a *AggregateDigest) Add(h uint64) { a.d.add(h) }
+
+// Rows returns the number of rows folded in.
+func (a *AggregateDigest) Rows() int64 { return a.d.Rows() }
+
+// Hex renders the aggregate as a fixed-width hex string.
+func (a *AggregateDigest) Hex() string { return a.d.Hex() }
+
 // dataColumns returns a stream's non-metadata column names in schema order —
 // the fixed column set both sides checksum over.
 func dataColumns(s model.Stream) []string {
