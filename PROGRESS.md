@@ -95,7 +95,7 @@
 - [x] Dependabot config (gomod ×2, npm, actions; weekly)
 - [x] `lakesense doctor` CLI (config/db/migrations/freshness, --json, exit 0/1; wired as compose healthcheck)
 - [ ] Canary pipeline (self-test nightly)
-- [ ] scripts/backup-metadata.sh + restore docs
+- [x] scripts/backup-metadata.sh — pg_dump → timestamped .sql.gz with retention rotation + documented restore; VERIFIED against a seeded DB (12K dump with pipeline data).
 - [x] Compose hardening (healthchecks, restart: unless-stopped, log rotation) — done in Phase 5
 - [ ] Weekly LLM self-report
 
