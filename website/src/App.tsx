@@ -29,7 +29,7 @@ export default function App() {
         </div>
 
         <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-          <img src="/wordmark.svg" alt="LakeSense" className="h-8" />
+          <img src={`${import.meta.env.BASE_URL}wordmark.svg`} alt="LakeSense" className="h-8" />
           <div className="flex items-center gap-5 text-sm text-muted">
             <a href="#wedge" className="hidden hover:text-ink sm:inline">Why free</a>
             <a href="#product" className="hidden hover:text-ink sm:inline">Product</a>

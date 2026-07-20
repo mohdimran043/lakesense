@@ -195,7 +195,7 @@ export function Showcase() {
         Every sync ships with proof it's correct.
       </h2>
       <div className="mt-12 grid items-center gap-8 md:grid-cols-2">
-        <Frame src="/shots/dashboard.jpg" alt="LakeSense dashboard — fleet health and verified badges" tilt="-4deg" />
+        <Frame src={`${import.meta.env.BASE_URL}shots/dashboard.jpg`} alt="LakeSense dashboard — fleet health and verified badges" tilt="-4deg" />
         <div>
           <h3 className="font-display text-xl font-medium">A fleet that senses itself</h3>
           <p className="mt-2 text-muted">
@@ -210,7 +210,7 @@ export function Showcase() {
             corruption anywhere shows up as a mismatch — the Datafold feature, free, on every run.
           </p>
         </div>
-        <Frame src="/shots/diff.jpg" alt="LakeSense data-diff correctness board" tilt="4deg" className="md:order-1" />
+        <Frame src={`${import.meta.env.BASE_URL}shots/diff.jpg`} alt="LakeSense data-diff correctness board" tilt="4deg" className="md:order-1" />
       </div>
     </Section>
   );

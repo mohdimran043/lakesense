@@ -1,0 +1,51 @@
+name: pages
+
+# Deploys the marketing website (website/) to GitHub Pages as a project site at
+# https://<user>.github.io/lakesense/. Enable once: repo Settings → Pages →
+# Source = "GitHub Actions". Then every push to main that touches website/
+# republishes.
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: build site
+        run: |
+          cd website
+          npm ci
+          npm run build
+        env:
+          # Project-site subpath. For a custom domain or a user/org site
+          # (<user>.github.io), set VITE_BASE=/ instead.
+          VITE_BASE: /lakesense/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
