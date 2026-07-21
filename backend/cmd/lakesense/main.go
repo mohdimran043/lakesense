@@ -23,6 +23,7 @@ import (
 	"github.com/lakesense/lakesense/backend/internal/collector"
 	"github.com/lakesense/lakesense/backend/internal/config"
 	"github.com/lakesense/lakesense/backend/internal/runner"
+	"github.com/lakesense/lakesense/backend/internal/scheduler"
 	"github.com/lakesense/lakesense/backend/internal/seed"
 	"github.com/lakesense/lakesense/backend/internal/store"
 )
@@ -113,6 +114,16 @@ func run(logger *slog.Logger) error {
 	ingest := collector.NewIngester(collector.NewPgSink(st.Pool)).Ingest
 	run := runner.New(runner.NewExecEngine(cfg.EnginePath), ingest, runner.NewPgLoader(st.Pool), cfg.DataDir, nil)
 
+	// trigger starts a run without blocking the scheduler's tick.
+	trigger := func(id int64) {
+		go func() {
+			if _, err := run.Run(context.Background(), id); err != nil {
+				logger.Error("scheduled run failed", "pipeline_id", id, "err", err)
+			}
+		}()
+	}
+	sched := scheduler.New(scheduler.NewPgLister(st.Pool), trigger, 30*time.Second, nil, logger)
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.New(st.Pool, logger, run),
@@ -127,6 +138,12 @@ func run(logger *slog.Logger) error {
 			return fmt.Errorf("http server: %w", err)
 		}
 		return nil
+	})
+
+	// Scheduler: trigger due pipelines on a fixed tick until shutdown.
+	g.Go(func() error {
+		logger.Info("scheduler started", "interval", "30s")
+		return sched.Run(gctx)
 	})
 
 	// Graceful shutdown when the context is cancelled (signal or worker error).
