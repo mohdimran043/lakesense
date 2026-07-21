@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/lakesense/lakesense/backend/internal/anomaly"
 	"github.com/lakesense/lakesense/backend/internal/api"
 	"github.com/lakesense/lakesense/backend/internal/channels"
 	"github.com/lakesense/lakesense/backend/internal/collector"
@@ -138,6 +139,17 @@ func run(logger *slog.Logger) error {
 	ingest := collector.NewIngester(collector.NewPgSink(st.Pool), collector.WithProcessor(process)).Ingest
 	run := runner.New(runner.NewExecEngine(cfg.EnginePath), ingest, runner.NewPgLoader(st.Pool), cfg.DataDir, nil)
 
+	// Anomaly detection: score each pipeline's latest throughput against its own
+	// baseline and, on an outlier, emit an anomaly_detected event down the same
+	// ingest→rules→alert path (so a rule on "anomaly_detected" pages someone).
+	emitAnomaly := func(ctx context.Context, pipelineID int64, metric string, res anomaly.Result) error {
+		ev := fmt.Sprintf(`{"v":1,"event":"anomaly_detected","pipeline_id":%d,"payload":{"metric":%q,"value":%g,"expected":%g,"score":%g,"method":%q}}`,
+			pipelineID, metric, res.Value, res.Expected, res.Score, res.Method)
+		_, err := ingest(ctx, pipelineID, strings.NewReader(ev))
+		return err
+	}
+	anomalyWorker := anomaly.NewWorker(anomaly.NewPgSource(st.Pool), emitAnomaly, "rows_written", nil)
+
 	// trigger starts a run without blocking the scheduler's tick.
 	trigger := func(id int64) {
 		go func() {
@@ -182,6 +194,23 @@ func run(logger *slog.Logger) error {
 			case <-t.C:
 				if err := escWorker.Tick(gctx); err != nil {
 					logger.Error("escalation tick", "err", err)
+				}
+			}
+		}
+	})
+
+	// Anomaly detection: score recent throughput on a slower tick.
+	g.Go(func() error {
+		logger.Info("anomaly worker started", "interval", "5m")
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-t.C:
+				if err := anomalyWorker.Tick(gctx); err != nil {
+					logger.Error("anomaly tick", "err", err)
 				}
 			}
 		}
