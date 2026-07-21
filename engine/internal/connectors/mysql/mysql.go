@@ -97,11 +97,10 @@ func New() sdk.Connector { return &Connector{} }
 // Spec implements sdk.Connector.
 func (c *Connector) Spec() sdk.Spec {
 	return sdk.Spec{
-		Type:        Type,
-		DisplayName: "MySQL",
-		// CDC (binlog) joins the declaration once its battery passes (below).
-		Capabilities: []sdk.Capability{sdk.CapFullLoad, sdk.CapIncremental},
-		Maturity:     sdk.MaturityStable,
+		Type:         Type,
+		DisplayName:  "MySQL",
+		Capabilities: []sdk.Capability{sdk.CapFullLoad, sdk.CapIncremental, sdk.CapCDC},
+		Maturity:     sdk.MaturityCertified,
 		ConfigSchema: json.RawMessage(configSchema),
 		Presets: []sdk.Preset{
 			{Name: "mariadb", DisplayName: "MariaDB"},
@@ -175,6 +174,9 @@ func (c *Connector) Discover(ctx context.Context) ([]model.Stream, error) {
 			return nil, fmt.Errorf("schema for %s: %w", name, err)
 		}
 		modes := []model.SyncMode{model.ModeFullLoad, model.ModeIncremental}
+		if len(schema.PrimaryKey()) > 0 {
+			modes = append(modes, model.ModeCDC) // binlog CDC needs a PK for record identity
+		}
 		streams = append(streams, model.Stream{
 			Namespace:          c.cfg.Database,
 			Name:               name,

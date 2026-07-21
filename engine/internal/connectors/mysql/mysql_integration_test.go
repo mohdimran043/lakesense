@@ -94,6 +94,57 @@ func TestMySQLFullLoadAndIncremental(t *testing.T) {
 	require.Len(t, second, 2, "incremental returns only rows past the cursor")
 }
 
+func TestMySQLBinlogCDC(t *testing.T) {
+	ctx := context.Background()
+	raw := mysqlConfig(t)
+	var probe struct {
+		Host, Database, User, Password string
+		Port                           int
+	}
+	require.NoError(t, json.Unmarshal(raw, &probe))
+	db, err := sql.Open("mysql", probe.User+":"+probe.Password+"@tcp("+probe.Host+":"+itoa(probe.Port)+")/"+probe.Database)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, _ = db.ExecContext(ctx, "DROP TABLE IF EXISTS it_cdc")
+	_, err = db.ExecContext(ctx, `CREATE TABLE it_cdc(id INT PRIMARY KEY, v VARCHAR(16) NOT NULL)`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO it_cdc VALUES (1,'a')`)
+	require.NoError(t, err)
+
+	c := mysql.New()
+	require.NoError(t, c.Setup(ctx, raw))
+	defer func() { _ = c.Close(ctx) }()
+	streams, err := c.Discover(ctx)
+	require.NoError(t, err)
+	stream, ok := findStream(streams, "it_cdc")
+	require.True(t, ok)
+
+	cs, ok := c.(sdk.ChangeStreamer)
+	require.True(t, ok)
+
+	// Anchor, then make insert/update/delete changes, then replay them.
+	pos, err := cs.PrepareCDC(ctx, []model.Stream{stream})
+	require.NoError(t, err)
+	// Separate statements: the go-sql-driver rejects multi-statement Exec by default.
+	_, err = db.ExecContext(ctx, `INSERT INTO it_cdc VALUES (2,'b')`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE it_cdc SET v='A' WHERE id=1`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `DELETE FROM it_cdc WHERE id=1`)
+	require.NoError(t, err)
+
+	var kinds []sdk.ChangeKind
+	final, err := cs.StreamChanges(ctx, []model.Stream{stream}, pos, func(_ context.Context, ch sdk.Change) error {
+		kinds = append(kinds, ch.Kind)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, final["file"])
+	require.Contains(t, kinds, sdk.ChangeInsert)
+	require.Contains(t, kinds, sdk.ChangeUpdate)
+	require.Contains(t, kinds, sdk.ChangeDelete)
+}
+
 func findStream(streams []model.Stream, name string) (model.Stream, bool) {
 	for _, s := range streams {
 		if s.Name == name {
