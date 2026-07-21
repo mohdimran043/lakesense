@@ -159,7 +159,7 @@ export function PaywallBuster() {
 // product does, never more (the connector-honesty principle, on the marketing).
 const shippingSources: { name: string; maturity: "Certified" | "Stable" | "Beta" }[] = [
   { name: "PostgreSQL", maturity: "Certified" },
-  { name: "MySQL", maturity: "Stable" },
+  { name: "MySQL", maturity: "Certified" },
   { name: "SQLite", maturity: "Beta" },
 ];
 const roadmapSources = [
