@@ -14,20 +14,30 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/lakesense/lakesense/backend/internal/audit"
 	"github.com/lakesense/lakesense/backend/internal/buildinfo"
+	"github.com/lakesense/lakesense/backend/internal/pipelines"
 )
 
 // Server holds shared dependencies for handlers.
 type Server struct {
-	pool   *pgxpool.Pool
-	logger *slog.Logger
+	pool      *pgxpool.Pool
+	logger    *slog.Logger
+	pipelines *pipelines.Service
 }
 
 // New builds the router with logging, recovery, request-id, and timeout
-// middleware plus the base routes.
+// middleware plus the base routes, wiring the pipeline write service over the
+// pool.
 func New(pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
-	s := &Server{pool: pool, logger: logger}
+	svc := pipelines.NewService(pipelines.NewPgRepo(pool), audit.NewPgRecorder(pool), nil)
+	s := &Server{pool: pool, logger: logger, pipelines: svc}
+	return chiRouter(s)
+}
 
+// chiRouter builds the router for a Server. Shared by New and tests so handler
+// tests can run against a Server with a fake-backed service.
+func chiRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// RealIP is intentionally omitted: it trusts client-supplied forwarding
@@ -41,6 +51,7 @@ func New(pool *pgxpool.Pool, logger *slog.Logger) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/version", s.version)
 		s.registerData(r)
+		s.registerWrites(r)
 	})
 	return r
 }
