@@ -5,6 +5,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { useDiffs, useLineage, useMetrics, usePipeline } from "../lib/hooks";
 import { Badge, Card, EmptyState, Skeleton, Stat } from "../components/ui";
 import { HealthMeter, HealthScore, VerifiedBadge } from "../components/signals";
+import { PipelineActions } from "../components/PipelineActions";
 import { bytes, compactNum, duration, fullNum, relTime } from "../lib/format";
 
 const tabs = ["Overview", "Diff", "Lineage"] as const;
@@ -39,6 +40,9 @@ export function PipelineDetail() {
         </div>
         <div className="mt-3 max-w-md">
           <HealthMeter score={p.health_score} />
+        </div>
+        <div className="mt-4">
+          <PipelineActions id={id} name={p.name} status={p.status} />
         </div>
       </div>
 

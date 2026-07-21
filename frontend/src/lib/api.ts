@@ -147,9 +147,23 @@ export interface CreatedPipeline {
   current_version: number;
 }
 
+export interface BackfillRequest {
+  stream: string;
+  pk_min?: string;
+  pk_max?: string;
+  since_field?: string;
+  since_value?: string;
+}
+
 export const api = {
   pipelines: () => get<Pipeline[]>("/pipelines"),
   createPipeline: (req: CreatePipelineRequest) => post<CreatedPipeline>("/pipelines", req),
+  runPipeline: (id: number) => post<{ status: string; pipeline_id: number }>(`/pipelines/${id}/run`),
+  pausePipeline: (id: number) => post<{ status: string }>(`/pipelines/${id}/pause`),
+  resumePipeline: (id: number) => post<{ status: string }>(`/pipelines/${id}/resume`),
+  archivePipeline: (id: number) => del(`/pipelines/${id}`),
+  backfillPipeline: (id: number, body: BackfillRequest) =>
+    post<{ status: string; job_id: number }>(`/pipelines/${id}/backfill`, body),
   pipeline: (id: number) => get<Pipeline>(`/pipelines/${id}`),
   metrics: (id: number) => get<Metric[]>(`/pipelines/${id}/metrics`),
   diffs: (id: number) => get<DiffRun[]>(`/pipelines/${id}/diffs`),

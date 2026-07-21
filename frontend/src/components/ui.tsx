@@ -128,6 +128,28 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
+// Modal — a centered dialog over a scrim. Closes on backdrop click or Escape.
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+      role="presentation"
+    >
+      <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-display text-sm font-medium text-text">{title}</h3>
+          <button className="text-faint hover:text-text" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {children}
+      </Card>
+    </div>
+  );
+}
+
 // --- form primitives ---
 
 const controlBase =
