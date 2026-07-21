@@ -9,6 +9,8 @@ import { Alerts } from "./pages/Alerts";
 import { Diff } from "./pages/Diff";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
+import { Escalations } from "./pages/Escalations";
+import { Settings } from "./pages/Settings";
 
 export default function App() {
   return (
@@ -21,8 +23,10 @@ export default function App() {
         <Route path="/incidents" element={<Incidents />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/diff" element={<Diff />} />
+        <Route path="/escalations" element={<Escalations />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/audit" element={<Audit />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

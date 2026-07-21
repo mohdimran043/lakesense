@@ -5,7 +5,9 @@ import {
   type CreateChannelRequest,
   type CreatePipelineRequest,
   type CreateRuleRequest,
+  type EscalationStep,
   type PromoteRequest,
+  type Responder,
 } from "./api";
 
 // Write-side hooks. Each invalidates the queries its mutation affects so the
@@ -98,6 +100,22 @@ export function useDeleteRule() {
   return useMutation({
     mutationFn: (id: number) => api.deleteRule(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["rules"] }),
+  });
+}
+
+export function useCreateEscalationPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: { name: string; steps: EscalationStep[] }) => api.createEscalationPolicy(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["escalation-policies"] }),
+  });
+}
+
+export function useCreateOncallSchedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: { name: string; rotation: Responder[] }) => api.createOncallSchedule(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["oncall-schedules"] }),
   });
 }
 

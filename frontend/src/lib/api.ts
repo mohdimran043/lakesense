@@ -145,6 +145,37 @@ export interface CreateRuleRequest {
   pipeline_id?: number;
 }
 
+export interface EscalationStep {
+  after_seconds: number;
+  channel_ids: number[];
+  oncall_schedule_id?: number;
+}
+export interface EscalationPolicy {
+  id: number;
+  name: string;
+  steps: EscalationStep[];
+}
+export interface Responder {
+  name: string;
+  channel_ids: number[];
+}
+export interface OncallSchedule {
+  id: number;
+  name: string;
+  rotation: Responder[];
+}
+export interface BackfillJob {
+  id: number;
+  stream: string;
+  mode: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  rows: number;
+  error: string;
+  requested_by: string;
+  created_at: string;
+  finished_at: string | null;
+}
+
 // --- write-side request/response shapes (mirror backend/internal/pipelines) ---
 
 export interface EndpointInput {
@@ -212,11 +243,19 @@ export const api = {
   deleteChannel: (id: number) => del(`/channels/${id}`),
   createRule: (req: CreateRuleRequest) => post<{ id: number }>("/rules", req),
   deleteRule: (id: number) => del(`/rules/${id}`),
+  escalationPolicies: () => get<EscalationPolicy[]>("/escalation-policies"),
+  oncallSchedules: () => get<OncallSchedule[]>("/oncall-schedules"),
+  backfills: (id: number) => get<BackfillJob[]>(`/pipelines/${id}/backfills`),
+  createEscalationPolicy: (req: { name: string; steps: EscalationStep[] }) =>
+    post<{ id: number }>("/escalation-policies", req),
+  createOncallSchedule: (req: { name: string; rotation: Responder[] }) =>
+    post<{ id: number }>("/oncall-schedules", req),
   pipeline: (id: number) => get<Pipeline>(`/pipelines/${id}`),
   metrics: (id: number) => get<Metric[]>(`/pipelines/${id}/metrics`),
   diffs: (id: number) => get<DiffRun[]>(`/pipelines/${id}/diffs`),
   lineage: (id: number) => get<LineageEdge[]>(`/pipelines/${id}/lineage`),
   incidents: () => get<Incident[]>("/incidents"),
-  analytics: () => get<Analytics>("/analytics"),
+  analytics: (cost?: { costPerGB: number; costPerHour: number }) =>
+    get<Analytics>(cost ? `/analytics?cost_per_gb=${cost.costPerGB}&cost_per_hour=${cost.costPerHour}` : "/analytics"),
   audit: () => get<AuditEntry[]>("/audit"),
 };

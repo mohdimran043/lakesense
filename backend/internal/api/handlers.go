@@ -26,6 +26,93 @@ func (s *Server) registerData(r chi.Router) {
 	r.Get("/audit", s.auditLog)
 	r.Get("/channels", s.listChannels)
 	r.Get("/rules", s.listRules)
+	r.Get("/escalation-policies", s.listEscalationPolicies)
+	r.Get("/oncall-schedules", s.listOncallSchedules)
+	r.Get("/pipelines/{id}/backfills", s.listBackfills)
+}
+
+func (s *Server) listEscalationPolicies(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.pool.Query(r.Context(), `SELECT id, name, steps FROM escalation_policies ORDER BY name`)
+	if err != nil {
+		writeErr(w, "query escalation policies", err)
+		return
+	}
+	defer rows.Close()
+	type policy struct {
+		ID    int64           `json:"id"`
+		Name  string          `json:"name"`
+		Steps json.RawMessage `json:"steps"`
+	}
+	var out []policy
+	for rows.Next() {
+		var p policy
+		if err := rows.Scan(&p.ID, &p.Name, &p.Steps); err != nil {
+			writeErr(w, "scan policy", err)
+			return
+		}
+		out = append(out, p)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listOncallSchedules(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.pool.Query(r.Context(), `SELECT id, name, rotation FROM oncall_schedules ORDER BY name`)
+	if err != nil {
+		writeErr(w, "query oncall schedules", err)
+		return
+	}
+	defer rows.Close()
+	type sched struct {
+		ID       int64           `json:"id"`
+		Name     string          `json:"name"`
+		Rotation json.RawMessage `json:"rotation"`
+	}
+	var out []sched
+	for rows.Next() {
+		var x sched
+		if err := rows.Scan(&x.ID, &x.Name, &x.Rotation); err != nil {
+			writeErr(w, "scan schedule", err)
+			return
+		}
+		out = append(out, x)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listBackfills(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT id, stream, mode, status, rows, error, requested_by, created_at, finished_at
+		 FROM backfill_jobs WHERE pipeline_id = $1 ORDER BY created_at DESC LIMIT 100`, id)
+	if err != nil {
+		writeErr(w, "query backfills", err)
+		return
+	}
+	defer rows.Close()
+	type job struct {
+		ID          int64      `json:"id"`
+		Stream      string     `json:"stream"`
+		Mode        string     `json:"mode"`
+		Status      string     `json:"status"`
+		Rows        int64      `json:"rows"`
+		Error       string     `json:"error"`
+		RequestedBy string     `json:"requested_by"`
+		CreatedAt   time.Time  `json:"created_at"`
+		FinishedAt  *time.Time `json:"finished_at"`
+	}
+	var out []job
+	for rows.Next() {
+		var j job
+		if err := rows.Scan(&j.ID, &j.Stream, &j.Mode, &j.Status, &j.Rows, &j.Error, &j.RequestedBy, &j.CreatedAt, &j.FinishedAt); err != nil {
+			writeErr(w, "scan backfill", err)
+			return
+		}
+		out = append(out, j)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) listChannels(w http.ResponseWriter, r *http.Request) {

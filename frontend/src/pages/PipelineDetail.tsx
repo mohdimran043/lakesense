@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useDiffs, useLineage, useMetrics, usePipeline } from "../lib/hooks";
+import { useBackfills, useDiffs, useLineage, useMetrics, usePipeline } from "../lib/hooks";
 import { Badge, Card, EmptyState, Skeleton, Stat } from "../components/ui";
 import { HealthMeter, HealthScore, VerifiedBadge } from "../components/signals";
 import { PipelineActions } from "../components/PipelineActions";
 import { bytes, compactNum, duration, fullNum, relTime } from "../lib/format";
 
-const tabs = ["Overview", "Diff", "Lineage"] as const;
+const tabs = ["Overview", "Diff", "Lineage", "Backfills"] as const;
 type Tab = (typeof tabs)[number];
 
 export function PipelineDetail() {
@@ -65,7 +65,39 @@ export function PipelineDetail() {
       {tab === "Overview" && <OverviewTab id={id} lastSync={p.last_sync_at} />}
       {tab === "Diff" && <DiffTab id={id} />}
       {tab === "Lineage" && <LineageTab id={id} />}
+      {tab === "Backfills" && <BackfillsTab id={id} />}
     </div>
+  );
+}
+
+function BackfillsTab({ id }: { id: number }) {
+  const { data, isLoading } = useBackfills(id);
+  if (isLoading) return <Skeleton className="h-48" />;
+  const jobs = data ?? [];
+  if (jobs.length === 0)
+    return <EmptyState title="No backfills yet" hint="Launch one from the Backfill button to re-sync a bounded window." />;
+
+  const tone = (s: string) =>
+    s === "succeeded" ? "signal" : s === "failed" ? "danger" : s === "running" ? "info" : "neutral";
+
+  return (
+    <Card className="divide-y divide-line">
+      {jobs.map((j) => (
+        <div key={j.id} className="flex items-center justify-between px-4 py-3">
+          <div className="min-w-0">
+            <div className="tnum text-sm text-text">{j.stream}</div>
+            <div className="text-xs text-faint">
+              {j.mode} · by {j.requested_by} · {relTime(j.created_at)}
+              {j.error && <span className="text-danger"> · {j.error}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {j.rows > 0 && <span className="tnum text-xs text-muted">{compactNum(j.rows)} rows</span>}
+            <Badge tone={tone(j.status)}>{j.status}</Badge>
+          </div>
+        </div>
+      ))}
+    </Card>
   );
 }
 

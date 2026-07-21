@@ -8,6 +8,8 @@ import {
   DollarSign,
   GitBranch,
   LayoutDashboard,
+  Settings as SettingsIcon,
+  Siren,
   SlidersHorizontal,
   Moon,
   ScrollText,
@@ -23,9 +25,11 @@ const nav = [
   { to: "/pipelines", label: "Pipelines", icon: GitBranch },
   { to: "/incidents", label: "Incidents", icon: Bell },
   { to: "/alerts", label: "Alerts & Rules", icon: SlidersHorizontal },
+  { to: "/escalations", label: "Escalations", icon: Siren },
   { to: "/diff", label: "Data-Diff", icon: BadgeCheck },
   { to: "/analytics", label: "Analytics", icon: DollarSign },
   { to: "/audit", label: "Audit log", icon: ScrollText },
+  { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
