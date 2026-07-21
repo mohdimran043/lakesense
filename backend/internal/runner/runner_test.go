@@ -18,6 +18,7 @@ type fakeEngine struct {
 	syncCatalog  string
 	syncErr      error
 	jsonl        string
+	backfillOpts BackfillOpts
 }
 
 func (f *fakeEngine) Discover(_ context.Context, sourceConfigPath string) ([]byte, error) {
@@ -29,6 +30,12 @@ func (f *fakeEngine) Sync(_ context.Context, p SyncPaths, _ int64, out io.Writer
 	// Record the catalog the runner built, then emit the canned stream.
 	b, _ := os.ReadFile(p.Catalog)
 	f.syncCatalog = string(b)
+	_, _ = io.WriteString(out, f.jsonl)
+	return f.syncErr
+}
+
+func (f *fakeEngine) Backfill(_ context.Context, _ SyncPaths, _ int64, o BackfillOpts, out io.Writer) error {
+	f.backfillOpts = o
 	_, _ = io.WriteString(out, f.jsonl)
 	return f.syncErr
 }
@@ -102,4 +109,21 @@ func TestRunNotFound(t *testing.T) {
 	_, err := r.Run(context.Background(), 99)
 	var nf *NotFoundError
 	require.ErrorAs(t, err, &nf)
+}
+
+func TestBackfillPassesOptsAndIngests(t *testing.T) {
+	eng := &fakeEngine{jsonl: cannedJSONL()}
+	var ingested int
+	loader := fakeLoader{ok: true, cfg: PipelineConfig{
+		SourceConfig:      []byte(`{"type":"sqlite","settings":{}}`),
+		DestinationConfig: []byte(`{"type":"parquet","settings":{"path":"/tmp/out"}}`),
+		Selections:        []StreamSelection{{Namespace: "main", Name: "items", Mode: "full_load"}},
+	}}
+	r := New(eng, countingIngest(&ingested), loader, t.TempDir(), func() time.Time { return time.Unix(0, 0) })
+
+	res, err := r.Backfill(context.Background(), 7, BackfillOpts{Stream: "main.items", PKMin: "1", PKMax: "100"})
+	require.NoError(t, err)
+	require.Equal(t, 4, res.Events)
+	require.Equal(t, "main.items", eng.backfillOpts.Stream)
+	require.Equal(t, "1", eng.backfillOpts.PKMin)
 }

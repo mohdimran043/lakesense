@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/lakesense/lakesense/backend/internal/audit"
+	"github.com/lakesense/lakesense/backend/internal/runner"
 )
 
 // This file holds the "admin" write endpoints (B4): incident actions, rule and
@@ -24,6 +26,7 @@ func (s *Server) registerAdmin(r chi.Router) {
 	r.Post("/channels", s.createChannel)
 	r.Delete("/channels/{id}", s.deleteChannel)
 	r.Get("/pipelines/{id}/config", s.exportConfig)
+	r.Post("/pipelines/{id}/backfill", s.launchBackfill)
 }
 
 // clock returns the server clock, defaulting to wall time when unset (tests may
@@ -257,6 +260,76 @@ func (s *Server) exportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": version, "yaml": yamlDoc})
+}
+
+// --- backfill launch ---
+
+type backfillRequest struct {
+	Stream     string `json:"stream"`
+	PKMin      string `json:"pk_min"`
+	PKMax      string `json:"pk_max"`
+	SinceField string `json:"since_field"`
+	SinceValue string `json:"since_value"`
+}
+
+// launchBackfill records a backfill job and triggers it in the background,
+// returning 202 with the job id. The engine backfill is idempotent (merge-on-
+// read) and state-safe, so it never disturbs the pipeline's ongoing sync state.
+func (s *Server) launchBackfill(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req backfillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if req.Stream == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stream is required"})
+		return
+	}
+	mode := "pk_range"
+	if req.SinceField != "" {
+		mode = "changed_since"
+	} else if req.PKMin == "" && req.PKMax == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "provide a pk_min/pk_max range or a since_field/since_value window"})
+		return
+	}
+	params, _ := json.Marshal(req)
+
+	var jobID int64
+	err := s.pool.QueryRow(r.Context(),
+		`INSERT INTO backfill_jobs (pipeline_id, stream, mode, params, status, requested_by)
+		 VALUES ($1,$2,$3,$4,'queued',$5) RETURNING id`,
+		id, req.Stream, mode, params, actor(r)).Scan(&jobID)
+	if err != nil {
+		writeErr(w, "queue backfill", err)
+		return
+	}
+	s.audited(r, "pipeline.backfill", "pipeline", chi.URLParam(r, "id"), map[string]any{"job_id": jobID, "stream": req.Stream})
+
+	opts := runner.BackfillOpts{Stream: req.Stream, PKMin: req.PKMin, PKMax: req.PKMax, SinceField: req.SinceField, SinceValue: req.SinceValue}
+	go s.runBackfillJob(jobID, id, opts)
+
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "started", "job_id": jobID})
+}
+
+// runBackfillJob executes a queued backfill and records its lifecycle. It uses a
+// background context so it survives the HTTP response.
+func (s *Server) runBackfillJob(jobID, pipelineID int64, opts runner.BackfillOpts) {
+	ctx := context.Background()
+	_, _ = s.pool.Exec(ctx, `UPDATE backfill_jobs SET status='running', started_at=now() WHERE id=$1`, jobID)
+	if s.runner == nil {
+		return
+	}
+	res, err := s.runner.Backfill(ctx, pipelineID, opts)
+	if err != nil {
+		s.logger.Error("backfill failed", "job_id", jobID, "pipeline_id", pipelineID, "err", err)
+		_, _ = s.pool.Exec(ctx, `UPDATE backfill_jobs SET status='failed', error=$2, finished_at=now() WHERE id=$1`, jobID, err.Error())
+		return
+	}
+	_, _ = s.pool.Exec(ctx, `UPDATE backfill_jobs SET status='succeeded', rows=$2, finished_at=now() WHERE id=$1`, jobID, res.Events)
 }
 
 func itoa(id int64) string { return strconv.FormatInt(id, 10) }

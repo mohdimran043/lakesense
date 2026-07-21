@@ -13,10 +13,11 @@ import (
 	"github.com/lakesense/lakesense/backend/internal/runner"
 )
 
-// pipelineRunner triggers a pipeline run. Implemented by *runner.Runner; faked
-// in tests.
+// pipelineRunner triggers pipeline runs and backfills. Implemented by
+// *runner.Runner; faked in tests.
 type pipelineRunner interface {
 	Run(ctx context.Context, id int64) (runner.RunResult, error)
+	Backfill(ctx context.Context, id int64, o runner.BackfillOpts) (runner.RunResult, error)
 }
 
 // registerWrites mounts the pipeline write endpoints. The read API (registerData)
