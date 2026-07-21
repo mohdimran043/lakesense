@@ -70,11 +70,13 @@ never cite anyone else's numbers as ours.
 
 ## Create & run a pipeline
 
-> **Status:** today pipelines are created and run through the **engine CLI**
-> (`lsengine`) with JSON config files — the flow below is real and tested
-> (`scripts/verify-migration.sh` does exactly this). An in-dashboard
-> **create-pipeline wizard** and a control-plane write API are the next milestone
-> (the dashboard is read-only for now; `seed` populates it with demo data).
+> **Status:** pipelines can be created through the **control-plane write API**
+> (`POST /api/v1/pipelines` — with automatic config versioning + audit on every
+> change) as well as directly through the **engine CLI** (`lsengine`) with JSON
+> config files (the flow below is real and tested; `scripts/verify-migration.sh`
+> does exactly this). Still landing next: the in-dashboard **create-pipeline
+> wizard** (consumes the write API) and the scheduled runner that executes
+> created pipelines automatically.
 
 A pipeline is three JSON files — a source, a destination, and a stream catalog —
 driven through four verbs: `spec` (see a connector's config schema), `check`
