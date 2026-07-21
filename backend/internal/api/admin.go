@@ -35,13 +35,14 @@ func (s *Server) clock() time.Time {
 	return time.Now().UTC()
 }
 
-// audited records an audit entry, logging (not failing) on error — the mutation
-// already succeeded.
-func (s *Server) audited(r *http.Request, action, entityType, entityID string, before, after any) {
+// audited records an audit entry for a mutation, logging (not failing) on error
+// — the mutation already succeeded. before is nil for these create/delete/action
+// events; the after value captures the change.
+func (s *Server) audited(r *http.Request, action, entityType, entityID string, after any) {
 	if s.audit == nil {
 		return
 	}
-	if err := audit.Log(r.Context(), s.audit, actor(r), action, entityType, entityID, before, after, s.clock()); err != nil {
+	if err := audit.Log(r.Context(), s.audit, actor(r), action, entityType, entityID, nil, after, s.clock()); err != nil {
 		s.logger.Error("audit", "action", action, "err", err)
 	}
 }
@@ -83,7 +84,7 @@ func (s *Server) snoozeIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = s.pool.Exec(r.Context(), `INSERT INTO acks (incident_id, actor, action) VALUES ($1,$2,'snooze')`, id, actor(r))
-	s.audited(r, "incident.snooze", "incident", chi.URLParam(r, "id"), nil, map[string]string{"until": body.Until})
+	s.audited(r, "incident.snooze", "incident", chi.URLParam(r, "id"), map[string]string{"until": body.Until})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "snoozed"})
 }
 
@@ -101,7 +102,7 @@ func (s *Server) transitionIncident(w http.ResponseWriter, r *http.Request, acti
 		return
 	}
 	_, _ = s.pool.Exec(r.Context(), `INSERT INTO acks (incident_id, actor, action) VALUES ($1,$2,$3)`, id, actor(r), action)
-	s.audited(r, "incident."+action, "incident", chi.URLParam(r, "id"), nil, map[string]string{"status": status})
+	s.audited(r, "incident."+action, "incident", chi.URLParam(r, "id"), map[string]string{"status": status})
 	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
@@ -161,7 +162,7 @@ func (s *Server) createRule(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, "create rule", err)
 		return
 	}
-	s.audited(r, "rule.create", "rule", itoa(id), nil, req)
+	s.audited(r, "rule.create", "rule", itoa(id), req)
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
@@ -179,7 +180,7 @@ func (s *Server) deleteRule(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "rule not found"})
 		return
 	}
-	s.audited(r, "rule.delete", "rule", chi.URLParam(r, "id"), nil, nil)
+	s.audited(r, "rule.delete", "rule", chi.URLParam(r, "id"), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -215,7 +216,7 @@ func (s *Server) createChannel(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, "create channel", err)
 		return
 	}
-	s.audited(r, "channel.create", "channel", itoa(id), nil, map[string]string{"name": req.Name, "type": req.Type})
+	s.audited(r, "channel.create", "channel", itoa(id), map[string]string{"name": req.Name, "type": req.Type})
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
@@ -233,7 +234,7 @@ func (s *Server) deleteChannel(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "channel not found"})
 		return
 	}
-	s.audited(r, "channel.delete", "channel", chi.URLParam(r, "id"), nil, nil)
+	s.audited(r, "channel.delete", "channel", chi.URLParam(r, "id"), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
