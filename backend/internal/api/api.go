@@ -25,14 +25,17 @@ type Server struct {
 	logger    *slog.Logger
 	pipelines *pipelines.Service
 	runner    pipelineRunner
+	audit     audit.Recorder
+	now       func() time.Time
 }
 
 // New builds the router with logging, recovery, request-id, and timeout
 // middleware plus the base routes, wiring the pipeline write service and the
 // runner over the pool.
 func New(pool *pgxpool.Pool, logger *slog.Logger, run pipelineRunner) http.Handler {
-	svc := pipelines.NewService(pipelines.NewPgRepo(pool), audit.NewPgRecorder(pool), nil)
-	s := &Server{pool: pool, logger: logger, pipelines: svc, runner: run}
+	rec := audit.NewPgRecorder(pool)
+	svc := pipelines.NewService(pipelines.NewPgRepo(pool), rec, nil)
+	s := &Server{pool: pool, logger: logger, pipelines: svc, runner: run, audit: rec, now: time.Now}
 	return chiRouter(s)
 }
 
@@ -53,6 +56,7 @@ func chiRouter(s *Server) http.Handler {
 		r.Get("/version", s.version)
 		s.registerData(r)
 		s.registerWrites(r)
+		s.registerAdmin(r)
 	})
 	return r
 }
