@@ -9,6 +9,7 @@ import (
 
 	"github.com/lakesense/lakesense/backend/internal/audit"
 	"github.com/lakesense/lakesense/backend/internal/configver"
+	"github.com/lakesense/lakesense/backend/internal/envs"
 )
 
 // fakeRepo is an in-memory Repo for service unit tests.
@@ -178,6 +179,49 @@ func TestUpdateNotFound(t *testing.T) {
 	_, err := svc.Update(context.Background(), "bob", 999, sampleReq())
 	var nf *NotFoundError
 	require.ErrorAs(t, err, &nf)
+}
+
+func TestPromoteRejectsMissingCredentials(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, &fakeRecorder{}, fixedNow)
+	p, _ := svc.Create(context.Background(), "alice", sampleReq()) // source has host=db (sensitive)
+
+	// No overrides → the sensitive source.host is missing → rejected.
+	_, err := svc.Promote(context.Background(), "alice", p.ID, "prod", envs.Overrides{})
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve)
+	require.Contains(t, err.Error(), "source.host")
+}
+
+func TestPromoteCreatesPipelineInTargetEnv(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, &fakeRecorder{}, fixedNow)
+	src, _ := svc.Create(context.Background(), "alice", sampleReq())
+
+	promoted, err := svc.Promote(context.Background(), "alice", src.ID, "prod",
+		envs.Overrides{
+			Source:      map[string]string{"host": "prod-db"},
+			Destination: map[string]string{"path": "./prod-out"},
+		})
+	require.NoError(t, err)
+	require.Equal(t, "prod", promoted.Environment)
+	require.NotEqual(t, src.ID, promoted.ID, "promotion creates a new pipeline")
+}
+
+func TestApplyYAMLCreatesNewVersion(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, &fakeRecorder{}, fixedNow)
+	p, _ := svc.Create(context.Background(), "alice", sampleReq())
+
+	// The canonical YAML of v1, with the schedule changed.
+	yaml := "name: Orders to Lake\n" +
+		"source:\n  type: postgres\n  settings:\n    host: db\n" +
+		"destination:\n  type: parquet\n  settings:\n    path: ./out\n" +
+		"schedule: '@hourly'\n" +
+		"streams:\n  - name: public.orders\n    mode: full_load\n"
+	p2, err := svc.ApplyYAML(context.Background(), "bob", p.ID, yaml)
+	require.NoError(t, err)
+	require.Equal(t, 2, p2.CurrentVersion)
 }
 
 func TestArchiveSetsStatusAndAudits(t *testing.T) {

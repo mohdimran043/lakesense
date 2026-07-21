@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/lakesense/lakesense/backend/internal/audit"
+	"github.com/lakesense/lakesense/backend/internal/envs"
 	"github.com/lakesense/lakesense/backend/internal/runner"
 )
 
@@ -26,7 +27,37 @@ func (s *Server) registerAdmin(r chi.Router) {
 	r.Post("/channels", s.createChannel)
 	r.Delete("/channels/{id}", s.deleteChannel)
 	r.Get("/pipelines/{id}/config", s.exportConfig)
+	r.Post("/pipelines/{id}/config", s.applyConfig)
 	r.Post("/pipelines/{id}/backfill", s.launchBackfill)
+	r.Post("/escalation-policies", s.createEscalationPolicy)
+	r.Post("/oncall-schedules", s.createOncallSchedule)
+	r.Post("/pipelines/{id}/promote", s.promotePipeline)
+}
+
+// promotePipeline clones a pipeline's latest config into a target environment
+// with credential overrides, creating a new pipeline there.
+func (s *Server) promotePipeline(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		TargetEnv            string            `json:"target_env"`
+		SourceOverrides      map[string]string `json:"source_overrides"`
+		DestinationOverrides map[string]string `json:"destination_overrides"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	p, err := s.pipelines.Promote(r.Context(), actor(r), id, req.TargetEnv,
+		envs.Overrides{Source: req.SourceOverrides, Destination: req.DestinationOverrides})
+	if err != nil {
+		writeWriteErr(w, err)
+		return
+	}
+	s.audited(r, "pipeline.promote", "pipeline", chi.URLParam(r, "id"), map[string]any{"target_env": req.TargetEnv, "new_pipeline_id": p.ID})
+	writeJSON(w, http.StatusCreated, p)
 }
 
 // clock returns the server clock, defaulting to wall time when unset (tests may
@@ -260,6 +291,90 @@ func (s *Server) exportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"version": version, "yaml": yamlDoc})
+}
+
+// --- escalation policies & on-call schedules ---
+
+func (s *Server) createEscalationPolicy(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name  string          `json:"name"`
+		Steps json.RawMessage `json:"steps"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	steps := req.Steps
+	if len(steps) == 0 {
+		steps = json.RawMessage(`[]`)
+	}
+	var id int64
+	if err := s.pool.QueryRow(r.Context(),
+		`INSERT INTO escalation_policies (name, steps) VALUES ($1,$2) RETURNING id`,
+		req.Name, steps).Scan(&id); err != nil {
+		writeErr(w, "create escalation policy", err)
+		return
+	}
+	s.audited(r, "escalation_policy.create", "escalation_policy", itoa(id), map[string]string{"name": req.Name})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
+}
+
+func (s *Server) createOncallSchedule(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name      string          `json:"name"`
+		Rotation  json.RawMessage `json:"rotation"`
+		Overrides json.RawMessage `json:"overrides"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	rotation, overrides := req.Rotation, req.Overrides
+	if len(rotation) == 0 {
+		rotation = json.RawMessage(`[]`)
+	}
+	if len(overrides) == 0 {
+		overrides = json.RawMessage(`[]`)
+	}
+	var id int64
+	if err := s.pool.QueryRow(r.Context(),
+		`INSERT INTO oncall_schedules (name, rotation, overrides) VALUES ($1,$2,$3) RETURNING id`,
+		req.Name, rotation, overrides).Scan(&id); err != nil {
+		writeErr(w, "create oncall schedule", err)
+		return
+	}
+	s.audited(r, "oncall_schedule.create", "oncall_schedule", itoa(id), map[string]string{"name": req.Name})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
+}
+
+// applyConfig imports a pipeline-as-code YAML document, creating a new config
+// version (no-op when unchanged) — the write side of config export.
+func (s *Server) applyConfig(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		YAML string `json:"yaml"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.YAML == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a yaml field is required"})
+		return
+	}
+	p, err := s.pipelines.ApplyYAML(r.Context(), actor(r), id, req.YAML)
+	if err != nil {
+		writeWriteErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 // --- backfill launch ---

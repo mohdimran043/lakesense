@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"strings"
+
 	"github.com/lakesense/lakesense/backend/internal/audit"
 	"github.com/lakesense/lakesense/backend/internal/configver"
+	"github.com/lakesense/lakesense/backend/internal/envs"
 )
 
 // Repo is the consumer-side persistence seam for the write path. Multi-table
@@ -107,6 +110,64 @@ func (s *Service) Update(ctx context.Context, actor string, id int64, req Create
 		return Pipeline{}, fmt.Errorf("audit update: %w", err)
 	}
 	return viewFrom(id, "", row), nil
+}
+
+// Promote clones a pipeline's latest config into a target environment with
+// per-endpoint credential overrides, creating a new pipeline there. Sensitive
+// settings that were not overridden are rejected so a dev credential never
+// silently leaks into prod.
+func (s *Service) Promote(ctx context.Context, actor string, sourceID int64, targetEnv string, o envs.Overrides) (Pipeline, error) {
+	if targetEnv == "" {
+		return Pipeline{}, &ValidationError{Msg: "target environment is required"}
+	}
+	if _, ok, err := s.repo.GetPipeline(ctx, sourceID); err != nil {
+		return Pipeline{}, err
+	} else if !ok {
+		return Pipeline{}, &NotFoundError{ID: sourceID}
+	}
+	history, err := s.repo.ConfigHistory(ctx, sourceID)
+	if err != nil {
+		return Pipeline{}, err
+	}
+	if len(history) == 0 {
+		return Pipeline{}, &ValidationError{Msg: "source pipeline has no config to promote"}
+	}
+	cfg, err := configver.Parse(history[len(history)-1].YAML)
+	if err != nil {
+		return Pipeline{}, fmt.Errorf("parse source config: %w", err)
+	}
+	if missing := envs.MissingCredentials(cfg, o); len(missing) > 0 {
+		return Pipeline{}, &ValidationError{Msg: "missing credential overrides for target: " + strings.Join(missing, ", ")}
+	}
+	promoted := envs.Promote(cfg, o)
+	req := requestFromConfig(promoted)
+	req.Environment = targetEnv
+	return s.Create(ctx, actor, req)
+}
+
+// ApplyYAML imports a canonical pipeline-as-code document, applying it as an
+// update (which creates a new version only when the config actually changed).
+func (s *Service) ApplyYAML(ctx context.Context, actor string, id int64, yamlDoc string) (Pipeline, error) {
+	cfg, err := configver.Parse(yamlDoc)
+	if err != nil {
+		return Pipeline{}, &ValidationError{Msg: err.Error()}
+	}
+	return s.Update(ctx, actor, id, requestFromConfig(cfg))
+}
+
+// requestFromConfig maps a canonical config back to an update request.
+func requestFromConfig(cfg configver.Config) CreatePipelineRequest {
+	streams := make([]Stream, len(cfg.Streams))
+	for i, st := range cfg.Streams {
+		streams[i] = Stream{Name: st.Name, Mode: st.Mode, CursorField: st.CursorField}
+	}
+	return CreatePipelineRequest{
+		Name:        cfg.Name,
+		Source:      Endpoint{Type: cfg.Source.Type, Settings: cfg.Source.Settings},
+		Destination: Endpoint{Type: cfg.Destination.Type, Settings: cfg.Destination.Settings},
+		Schedule:    cfg.Schedule,
+		Streams:     streams,
+	}
 }
 
 // Rollback appends a new version whose config equals a prior version's.
