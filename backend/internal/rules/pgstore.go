@@ -42,13 +42,22 @@ func (s *PgStore) FindOpenIncident(ctx context.Context, fingerprint string) (*In
 	return &inc, nil
 }
 
-// CreateIncident inserts a new incident and returns its id.
+// CreateIncident inserts a new incident and returns its id. When the incident
+// carries an escalation policy, next_escalation_at is set to opened_at plus the
+// policy's first-step delay so the escalation worker picks it up on schedule —
+// the wiring that makes unacked incidents climb the policy (spec 4.4).
 func (s *PgStore) CreateIncident(ctx context.Context, inc *Incident) (int64, error) {
 	var id int64
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO incidents (pipeline_id, title, severity, status, fingerprint,
-		     event_count, summary, escalation_policy_id, opened_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+		     event_count, summary, escalation_policy_id, opened_at, next_escalation_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+		         CASE WHEN $8::bigint IS NULL THEN NULL
+		              ELSE $9::timestamptz + make_interval(secs =>
+		                   COALESCE((SELECT (steps->0->>'after_seconds')::int
+		                             FROM escalation_policies WHERE id = $8::bigint), 0))
+		         END)
+		 RETURNING id`,
 		nullID(inc.PipelineID), inc.Title, inc.Severity, inc.Status, inc.Fingerprint,
 		inc.EventCount, inc.Summary, nullID(inc.PolicyID), inc.OpenedAt).Scan(&id)
 	if err != nil {

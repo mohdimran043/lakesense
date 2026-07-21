@@ -23,6 +23,7 @@ import (
 	"github.com/lakesense/lakesense/backend/internal/channels"
 	"github.com/lakesense/lakesense/backend/internal/collector"
 	"github.com/lakesense/lakesense/backend/internal/config"
+	"github.com/lakesense/lakesense/backend/internal/escalation"
 	"github.com/lakesense/lakesense/backend/internal/rules"
 	"github.com/lakesense/lakesense/backend/internal/runner"
 	"github.com/lakesense/lakesense/backend/internal/scheduler"
@@ -116,6 +117,8 @@ func run(logger *slog.Logger) error {
 	// channel adapters. This is the one alerting path (spec 4.2–4.4) now running
 	// on real events, not just unit tests.
 	notifier := channels.New(channels.NewPgResolver(st.Pool), nil, nil)
+	escWorker := escalation.NewWorker(escalation.NewPgStore(st.Pool), escalation.NewPgPolicies(st.Pool),
+		escalation.NewPgSchedules(st.Pool), notifier, nil)
 	ruleEngine := rules.NewEngine(rules.NewPgStore(st.Pool), notifier, nil)
 	ruleLoader := rules.NewPgLoader(st.Pool)
 	process := func(ctx context.Context, pipelineID int64, e collector.Event) {
@@ -165,6 +168,23 @@ func run(logger *slog.Logger) error {
 	g.Go(func() error {
 		logger.Info("scheduler started", "interval", "30s")
 		return sched.Run(gctx)
+	})
+
+	// Escalation: climb unacked incidents up their policy on a fixed tick.
+	g.Go(func() error {
+		logger.Info("escalation worker started", "interval", "30s")
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-t.C:
+				if err := escWorker.Tick(gctx); err != nil {
+					logger.Error("escalation tick", "err", err)
+				}
+			}
+		}
 	})
 
 	// Graceful shutdown when the context is cancelled (signal or worker error).
