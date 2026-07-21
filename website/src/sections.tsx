@@ -157,9 +157,13 @@ export function PaywallBuster() {
 // ── Sources band ────────────────────────────────────────────────────────────
 // Shipping today vs on the honest roadmap — the site says exactly what the
 // product does, never more (the connector-honesty principle, on the marketing).
-const shippingSources = ["PostgreSQL", "SQLite"];
+const shippingSources: { name: string; maturity: "Certified" | "Stable" | "Beta" }[] = [
+  { name: "PostgreSQL", maturity: "Certified" },
+  { name: "MySQL", maturity: "Stable" },
+  { name: "SQLite", maturity: "Beta" },
+];
 const roadmapSources = [
-  "MySQL", "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB",
+  "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB", "Percona", "TiDB",
   "MongoDB", "SQL Server", "Kafka", "Oracle", "DB2", "ClickHouse", "Cassandra", "ScyllaDB",
   "DynamoDB", "Elasticsearch", "OpenSearch", "Redis", "S3", "GCS", "Azure Blob", "MinIO",
 ];
@@ -169,18 +173,19 @@ export function Sources() {
     <Section id="sources">
       <Eyebrow>Shipping today, honestly badged</Eyebrow>
       <h2 className="font-display text-3xl font-semibold md:text-4xl">
-        Two sources ship now. <span className="text-aqua">25+</span> on the roadmap.
+        Three sources ship now. <span className="text-aqua">25+</span> on the roadmap.
       </h2>
       <p className="mt-3 max-w-2xl text-muted">
         The connector SDK, one event schema, and inherited checksums make the family big — but we badge
         every source by the test battery it actually passes. A transparent matrix beats a matrix of lies.
       </p>
 
-      <div className="mt-9 text-xs font-mono uppercase tracking-widest text-aqua">Certified &amp; shipping</div>
+      <div className="mt-9 text-xs font-mono uppercase tracking-widest text-aqua">Shipping</div>
       <div className="mt-3 flex flex-wrap gap-2.5">
         {shippingSources.map((s) => (
-          <span key={s} className="inline-flex items-center gap-1.5 rounded-full border border-aqua/50 bg-aqua/10 px-3.5 py-1.5 font-mono text-sm text-aqua">
-            <span aria-hidden>✓</span> {s}
+          <span key={s.name} className="inline-flex items-center gap-2 rounded-full border border-aqua/50 bg-aqua/10 px-3.5 py-1.5 font-mono text-sm text-aqua">
+            <span aria-hidden>✓</span> {s.name}
+            <span className="rounded-full bg-aqua/15 px-1.5 text-[10px] uppercase tracking-wide">{s.maturity}</span>
           </span>
         ))}
       </div>
