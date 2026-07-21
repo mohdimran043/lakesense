@@ -79,8 +79,8 @@ export function Benchmarks() {
       </div>
       <p className="mt-6 font-mono text-xs text-faint">
         Measured on a 20-core box, NDJSON writer, keyset-chunked · reproduce with
-        <span className="text-muted"> scripts/benchmark.sh</span> · Parquet + parallel
-        readers (v0.2) go faster. We never cite anyone else's benchmarks as ours.
+        <span className="text-muted"> scripts/benchmark.sh</span> · Parquet output ships today;
+        parallel readers (v0.2) go faster. We never cite anyone else's benchmarks as ours.
       </p>
     </section>
   );
@@ -155,30 +155,41 @@ export function PaywallBuster() {
 }
 
 // ── Sources band ────────────────────────────────────────────────────────────
-const sources = [
-  "PostgreSQL", "MySQL", "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB",
-  "MongoDB", "SQL Server", "Kafka", "SQLite", "Oracle", "DB2", "ClickHouse", "Cassandra", "ScyllaDB",
+// Shipping today vs on the honest roadmap — the site says exactly what the
+// product does, never more (the connector-honesty principle, on the marketing).
+const shippingSources = ["PostgreSQL", "SQLite"];
+const roadmapSources = [
+  "MySQL", "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB",
+  "MongoDB", "SQL Server", "Kafka", "Oracle", "DB2", "ClickHouse", "Cassandra", "ScyllaDB",
   "DynamoDB", "Elasticsearch", "OpenSearch", "Redis", "S3", "GCS", "Azure Blob", "MinIO",
 ];
 
 export function Sources() {
   return (
     <Section id="sources">
-      <Eyebrow>25+ sources, one engine</Eyebrow>
+      <Eyebrow>Shipping today, honestly badged</Eyebrow>
       <h2 className="font-display text-3xl font-semibold md:text-4xl">
-        Protocol families, honestly badged.
+        Two sources ship now. <span className="text-aqua">25+</span> on the roadmap.
       </h2>
       <p className="mt-3 max-w-2xl text-muted">
-        Many databases speak the Postgres or MySQL wire protocol — one excellent connector serves a
-        whole family. Every source ships a maturity badge reflecting the test battery it actually passes.
+        The connector SDK, one event schema, and inherited checksums make the family big — but we badge
+        every source by the test battery it actually passes. A transparent matrix beats a matrix of lies.
       </p>
-      <div className="mt-10 flex flex-wrap gap-2.5">
-        {sources.map((s) => (
-          <span
-            key={s}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 font-mono text-sm text-muted transition-colors hover:border-aqua/50 hover:text-aqua"
-          >
-            {s}
+
+      <div className="mt-9 text-xs font-mono uppercase tracking-widest text-aqua">Certified &amp; shipping</div>
+      <div className="mt-3 flex flex-wrap gap-2.5">
+        {shippingSources.map((s) => (
+          <span key={s} className="inline-flex items-center gap-1.5 rounded-full border border-aqua/50 bg-aqua/10 px-3.5 py-1.5 font-mono text-sm text-aqua">
+            <span aria-hidden>✓</span> {s}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-7 text-xs font-mono uppercase tracking-widest text-faint">On the roadmap</div>
+      <div className="mt-3 flex flex-wrap gap-2.5">
+        {roadmapSources.map((s) => (
+          <span key={s} className="rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 font-mono text-sm text-faint">
+            {s} <span className="ml-1 text-[10px] text-faint/70">soon</span>
           </span>
         ))}
       </div>
@@ -230,10 +241,10 @@ function Frame({ src, alt, tilt, className = "" }: { src: string; alt: string; t
 // ── Architecture ────────────────────────────────────────────────────────────
 export function Architecture() {
   const steps = [
-    ["Sources", "25+ connectors"],
+    ["Sources", "Postgres · SQLite +"],
     ["lsengine", "chunk · CDC · checksum"],
     ["Collector", "JSONL → event store"],
-    ["Intelligence", "rules · anomaly · quality"],
+    ["Intelligence", "rules · escalation · anomaly · quality"],
     ["You", "alerted, with proof"],
   ];
   return (
