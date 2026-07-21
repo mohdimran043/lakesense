@@ -16,19 +16,22 @@ export default function App() {
     <div className="relative">
       {/* Hero */}
       <header className="relative flex min-h-[92vh] flex-col overflow-hidden">
-        {/* Background: poster always, live scene on top when supported. */}
-        <div className="hero-poster absolute inset-0 -z-10" aria-hidden="true">
+        {/* Background: poster always, live scene on top when supported. It sits
+            behind the content (-z-10) and never intercepts pointer events, so
+            the nav and CTAs stay clickable. */}
+        <div className="hero-poster pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
           {scene && (
             <Suspense fallback={null}>
               <Hero3D />
             </Suspense>
           )}
-          {/* Video slot: drop public/hero.mp4 to activate (see website/README.md).
-              Left unbundled so we never ship someone else's footage. */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-abyss" />
+          {/* Readability scrim: darken the left/text side and the bottom so the
+              headline stays legible over the bright particle scene. */}
+          <div className="absolute inset-0 bg-gradient-to-r from-abyss via-abyss/70 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-b from-abyss/60 via-transparent to-abyss" />
         </div>
 
-        <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+        <nav className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
           <img src={`${import.meta.env.BASE_URL}wordmark.svg`} alt="LakeSense" className="h-8" />
           <div className="flex items-center gap-5 text-sm text-muted">
             <a href="#wedge" className="hidden hover:text-ink sm:inline">Why free</a>
@@ -40,7 +43,7 @@ export default function App() {
           </div>
         </nav>
 
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6">
           <div className="max-w-3xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-aqua/30 bg-aqua/10 px-3 py-1 font-mono text-xs text-aqua">
               <span className="relative flex h-1.5 w-1.5">
