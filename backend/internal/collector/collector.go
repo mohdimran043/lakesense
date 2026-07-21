@@ -22,6 +22,8 @@ type Sink interface {
 	UpsertDiffRun(ctx context.Context, pipelineID int64, syncID, stream string, d DiffRun) error
 	// RecordLineage upserts one source→destination column edge.
 	RecordLineage(ctx context.Context, pipelineID int64, stream string, m ColumnMapping, syncID string) error
+	// RecordColumnStats persists per-column stats for a stream (quality input).
+	RecordColumnStats(ctx context.Context, pipelineID int64, stream, syncID string, ts time.Time, cols []ColumnStat) error
 	// MarkSynced updates the pipeline's last-sync timestamp.
 	MarkSynced(ctx context.Context, pipelineID int64, e Event) error
 }
@@ -166,6 +168,15 @@ func (i *Ingester) derive(ctx context.Context, pipelineID int64, e Event, pairs 
 		}
 		if err := i.sink.RecordLineage(ctx, pipelineID, e.Stream, m, e.SyncID); err != nil {
 			return fmt.Errorf("record lineage: %w", err)
+		}
+
+	case KindColumnStats:
+		var cs ColumnStats
+		if err := json.Unmarshal(e.Payload, &cs); err != nil {
+			return fmt.Errorf("decode column_stats: %w", err)
+		}
+		if err := i.sink.RecordColumnStats(ctx, pipelineID, e.Stream, e.SyncID, e.TS, cs.Columns); err != nil {
+			return fmt.Errorf("record column stats: %w", err)
 		}
 	}
 	return nil

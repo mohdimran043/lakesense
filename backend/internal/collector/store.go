@@ -72,6 +72,19 @@ func (s *PgSink) RecordLineage(ctx context.Context, pipelineID int64, stream str
 	return nil
 }
 
+func (s *PgSink) RecordColumnStats(ctx context.Context, pipelineID int64, stream, syncID string, ts time.Time, cols []ColumnStat) error {
+	for _, c := range cols {
+		_, err := s.pool.Exec(ctx,
+			`INSERT INTO column_stats (pipeline_id, stream, column_name, sync_id, ts, row_count, null_count, distinct_estimate, min_value, max_value)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			pipelineID, stream, c.Column, syncID, ts, c.Rows, c.Nulls, c.Distinct, c.Min, c.Max)
+		if err != nil {
+			return fmt.Errorf("insert column stats for %s.%s: %w", stream, c.Column, err)
+		}
+	}
+	return nil
+}
+
 func (s *PgSink) MarkSynced(ctx context.Context, pipelineID int64, e Event) error {
 	if pipelineID == 0 {
 		return nil

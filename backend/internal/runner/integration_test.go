@@ -37,6 +37,9 @@ func (s *countingSink) UpsertDiffRun(_ context.Context, _ int64, _, _ string, d 
 func (s *countingSink) RecordLineage(context.Context, int64, string, collector.ColumnMapping, string) error {
 	return nil
 }
+func (s *countingSink) RecordColumnStats(context.Context, int64, string, string, time.Time, []collector.ColumnStat) error {
+	return nil
+}
 func (s *countingSink) MarkSynced(context.Context, int64, collector.Event) error { return nil }
 
 type fixedLoader struct{ cfg runner.PipelineConfig }

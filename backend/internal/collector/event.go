@@ -33,6 +33,7 @@ const (
 	KindStreamFinished   = "stream_finished"
 	KindChecksumComputed = "checksum_computed"
 	KindColumnMapping    = "column_mapping"
+	KindColumnStats      = "column_stats"
 	KindSchemaChanged    = "schema_changed"
 	KindAnomalyDetected  = "anomaly_detected"
 )
@@ -67,6 +68,21 @@ type ColumnMapping struct {
 	SourceType   string `json:"source_type"`
 	DestColumn   string `json:"dest_column"`
 	DestType     string `json:"dest_type"`
+}
+
+// ColumnStat is one column's per-sync statistics (feeds quality monitors).
+type ColumnStat struct {
+	Column   string `json:"column"`
+	Rows     int64  `json:"rows"`
+	Nulls    int64  `json:"nulls"`
+	Distinct int64  `json:"distinct"`
+	Min      string `json:"min"`
+	Max      string `json:"max"`
+}
+
+// ColumnStats payload (per-stream, one entry per data column).
+type ColumnStats struct {
+	Columns []ColumnStat `json:"columns"`
 }
 
 // Error payload (rides on sync_failed).

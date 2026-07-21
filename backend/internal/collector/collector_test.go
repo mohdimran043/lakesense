@@ -17,6 +17,7 @@ type fakeSink struct {
 	diffs    []DiffRun
 	lineage  int
 	synced   int
+	colStats int
 	failNext bool
 }
 
@@ -39,6 +40,10 @@ func (f *fakeSink) RecordLineage(_ context.Context, _ int64, _ string, _ ColumnM
 	f.lineage++
 	return nil
 }
+func (f *fakeSink) RecordColumnStats(_ context.Context, _ int64, _, _ string, _ time.Time, cols []ColumnStat) error {
+	f.colStats += len(cols)
+	return nil
+}
 func (f *fakeSink) MarkSynced(_ context.Context, _ int64, _ Event) error { f.synced++; return nil }
 
 var assertErr = errTest("boom")
@@ -52,6 +57,7 @@ const matchingStream = `
 {"v":1,"ts":"2026-01-01T00:00:01Z","event":"checksum_computed","sync_id":"s1","stream":"public.a","payload":{"side":"source","rows":100,"checksum":"abc"}}
 {"v":1,"ts":"2026-01-01T00:00:02Z","event":"checksum_computed","sync_id":"s1","stream":"public.a","payload":{"side":"destination","rows":100,"checksum":"abc"}}
 {"v":1,"ts":"2026-01-01T00:00:03Z","event":"column_mapping","sync_id":"s1","stream":"public.a","payload":{"source_column":"id","source_type":"int64","dest_column":"id","dest_type":"int64"}}
+{"v":1,"ts":"2026-01-01T00:00:03Z","event":"column_stats","sync_id":"s1","stream":"public.a","payload":{"columns":[{"column":"id","rows":100,"nulls":0,"distinct":100},{"column":"v","rows":100,"nulls":5,"distinct":9}]}}
 {"v":1,"ts":"2026-01-01T00:00:04Z","event":"sync_finished","sync_id":"s1","payload":{"rows_read":100,"rows_written":100,"bytes_written":2048,"duration_seconds":1.5}}
 `
 
@@ -59,8 +65,8 @@ func TestIngestDerivesMatchingDiffAndMetric(t *testing.T) {
 	f := &fakeSink{}
 	n, err := NewIngester(f).Ingest(context.Background(), 7, strings.NewReader(matchingStream))
 	require.NoError(t, err)
-	assert.Equal(t, 5, n, "all five events stored")
-	assert.Equal(t, 5, f.events)
+	assert.Equal(t, 6, n, "all six events stored")
+	assert.Equal(t, 6, f.events)
 
 	require.Len(t, f.diffs, 1)
 	assert.True(t, f.diffs[0].Match, "equal rows+checksum ⇒ verified")
@@ -71,6 +77,7 @@ func TestIngestDerivesMatchingDiffAndMetric(t *testing.T) {
 	assert.InDelta(t, 1.5, f.metrics[0].DurationSeconds, 1e-9)
 
 	assert.Equal(t, 1, f.lineage)
+	assert.Equal(t, 2, f.colStats, "two columns' stats recorded")
 	assert.Equal(t, 1, f.synced)
 }
 
