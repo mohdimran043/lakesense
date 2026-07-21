@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { Dashboard } from "./pages/Dashboard";
 import { Pipelines } from "./pages/Pipelines";
+import { CreatePipeline } from "./pages/CreatePipeline";
 import { PipelineDetail } from "./pages/PipelineDetail";
 import { Incidents } from "./pages/Incidents";
 import { Diff } from "./pages/Diff";
@@ -14,6 +15,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/pipelines" element={<Pipelines />} />
+        <Route path="/pipelines/new" element={<CreatePipeline />} />
         <Route path="/pipelines/:id" element={<PipelineDetail />} />
         <Route path="/incidents" element={<Incidents />} />
         <Route path="/diff" element={<Diff />} />

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { usePipelines } from "../lib/hooks";
-import { Card, EmptyState, Skeleton } from "../components/ui";
+import { Button, Card, EmptyState, Skeleton } from "../components/ui";
 import { HealthMeter, HealthScore, VerifiedBadge } from "../components/signals";
 import { relTime } from "../lib/format";
 
@@ -9,9 +9,14 @@ export function Pipelines() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-text">Pipelines</h1>
-        <p className="mt-1 text-sm text-muted">Replication jobs and their live health sounding.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-text">Pipelines</h1>
+          <p className="mt-1 text-sm text-muted">Replication jobs and their live health sounding.</p>
+        </div>
+        <Link to="/pipelines/new">
+          <Button variant="primary">+ New pipeline</Button>
+        </Link>
       </div>
 
       {isLoading ? (
@@ -19,7 +24,15 @@ export function Pipelines() {
       ) : error ? (
         <EmptyState title="Can't reach the control plane" hint="Start the backend and seed demo data." />
       ) : !data || data.length === 0 ? (
-        <EmptyState title="No pipelines yet" hint="Run `lakesense seed` to explore with demo data." />
+        <EmptyState
+          title="No pipelines yet"
+          hint="Create your first pipeline, or run `lakesense seed` to explore with demo data."
+          action={
+            <Link to="/pipelines/new">
+              <Button variant="primary">+ New pipeline</Button>
+            </Link>
+          }
+        />
       ) : (
         <Card className="overflow-hidden">
           <div className="grid grid-cols-[1fr,auto,auto,auto] items-center gap-4 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-wide text-faint">
