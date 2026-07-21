@@ -164,6 +164,9 @@ export const api = {
   archivePipeline: (id: number) => del(`/pipelines/${id}`),
   backfillPipeline: (id: number, body: BackfillRequest) =>
     post<{ status: string; job_id: number }>(`/pipelines/${id}/backfill`, body),
+  ackIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/ack`),
+  snoozeIncident: (id: number, until: string) => post<{ status: string }>(`/incidents/${id}/snooze`, { until }),
+  resolveIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/resolve`),
   pipeline: (id: number) => get<Pipeline>(`/pipelines/${id}`),
   metrics: (id: number) => get<Metric[]>(`/pipelines/${id}/metrics`),
   diffs: (id: number) => get<DiffRun[]>(`/pipelines/${id}/diffs`),

@@ -52,3 +52,14 @@ export function useBackfill(id: number) {
     onSuccess: () => refreshPipeline(qc, id),
   });
 }
+
+// Incident actions. Each is scoped to one incident id so per-row buttons carry
+// their own pending state; success refreshes the incident list.
+export function useIncidentActions(id: number) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ["incidents"] });
+  const ack = useMutation({ mutationFn: () => api.ackIncident(id), onSuccess: refresh });
+  const snooze = useMutation({ mutationFn: (until: string) => api.snoozeIncident(id, until), onSuccess: refresh });
+  const resolve = useMutation({ mutationFn: () => api.resolveIncident(id), onSuccess: refresh });
+  return { ack, snooze, resolve };
+}

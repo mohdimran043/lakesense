@@ -1,8 +1,10 @@
 import { ShieldCheck } from "lucide-react";
 import { useIncidents } from "../lib/hooks";
-import { Card, EmptyState, Skeleton } from "../components/ui";
+import { useIncidentActions } from "../lib/mutations";
+import { Button, Card, EmptyState, Skeleton } from "../components/ui";
 import { SeverityPill, StatusDot } from "../components/signals";
 import { relTime } from "../lib/format";
+import type { Incident } from "../lib/api";
 
 export function Incidents() {
   const { data, isLoading, error } = useIncidents();
@@ -52,11 +54,40 @@ export function Incidents() {
                   </div>
                 </div>
                 <SeverityPill severity={i.severity} />
+                <IncidentActions incident={i} />
               </div>
             ))}
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+// IncidentActions renders ack / snooze / resolve for a non-resolved incident.
+// Each incident owns its mutation state, so a pending action only disables its
+// own row.
+function IncidentActions({ incident }: { incident: Incident }) {
+  const { ack, snooze, resolve } = useIncidentActions(incident.id);
+  if (incident.status === "resolved") return null;
+  const busy = ack.isPending || snooze.isPending || resolve.isPending;
+  const snooze1h = () => snooze.mutate(new Date(Date.now() + 3600_000).toISOString());
+
+  return (
+    <div className="flex items-center gap-1">
+      {incident.status !== "acked" && (
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => ack.mutate()}>
+          Ack
+        </Button>
+      )}
+      {incident.status !== "snoozed" && (
+        <Button variant="ghost" size="sm" disabled={busy} onClick={snooze1h}>
+          Snooze 1h
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" className="text-signal hover:text-signal" disabled={busy} onClick={() => resolve.mutate()}>
+        Resolve
+      </Button>
     </div>
   );
 }
