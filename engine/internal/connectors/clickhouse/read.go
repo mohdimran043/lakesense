@@ -77,7 +77,7 @@ func (c *Connector) ReadChunk(ctx context.Context, stream model.Stream, _ state.
 		return fmt.Errorf("query %s: %w", stream.ID(), err)
 	}
 	defer func() { _ = rows.Close() }()
-	return scanRows(ctx, rows, stream, emit)
+	return scanRows(ctx, rows, emit)
 }
 
 // MaxCursor implements sdk.IncrementalReader.
@@ -119,7 +119,7 @@ func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, curs
 	defer func() { _ = rows.Close() }()
 
 	newCursor := since
-	err = scanRows(ctx, rows, stream, func(ctx context.Context, row sdk.Row) error {
+	err = scanRows(ctx, rows, func(ctx context.Context, row sdk.Row) error {
 		if v, ok := row[cursorField]; ok && v != nil {
 			newCursor = fmt.Sprintf("%v", v)
 		}
@@ -132,18 +132,10 @@ func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, curs
 }
 
 // scanRows maps a *sql.Rows cursor into engine rows using ClickHouse column types.
-func scanRows(ctx context.Context, rows *sql.Rows, stream model.Stream, emit sdk.RowFunc) error {
+func scanRows(ctx context.Context, rows *sql.Rows, emit sdk.RowFunc) error {
 	cols, err := rows.Columns()
 	if err != nil {
 		return fmt.Errorf("read columns: %w", err)
-	}
-	lake := make([]model.DataType, len(cols))
-	for i, name := range cols {
-		if col, ok := stream.Schema.Column(name); ok {
-			lake[i] = col.Type
-		} else {
-			lake[i] = model.TypeString
-		}
 	}
 	for rows.Next() {
 		cells := make([]any, len(cols))
@@ -156,7 +148,7 @@ func scanRows(ctx context.Context, rows *sql.Rows, stream model.Stream, emit sdk
 		}
 		row := make(sdk.Row, len(cols))
 		for i, name := range cols {
-			row[name] = normalizeValue(cells[i], lake[i])
+			row[name] = normalizeValue(cells[i])
 		}
 		if err := emit(ctx, row); err != nil {
 			return err
@@ -166,7 +158,7 @@ func scanRows(ctx context.Context, rows *sql.Rows, stream model.Stream, emit sdk
 }
 
 // normalizeValue coerces a clickhouse-go scan value into a JSON-friendly value.
-func normalizeValue(v any, lake model.DataType) any {
+func normalizeValue(v any) any {
 	switch x := v.(type) {
 	case nil:
 		return nil
