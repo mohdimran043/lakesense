@@ -1,4 +1,11 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -119,4 +126,54 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
       {right}
     </div>
   );
+}
+
+// --- form primitives ---
+
+const controlBase =
+  "w-full rounded-control border bg-surface px-3 text-sm text-text placeholder:text-faint " +
+  "transition-colors focus:outline-none focus:border-signal disabled:opacity-50";
+
+function borderTone(invalid?: boolean): string {
+  return invalid ? "border-danger/60" : "border-line";
+}
+
+// Field wraps a control with a label, optional hint, and an error line.
+export function Field({
+  label,
+  error,
+  hint,
+  children,
+}: {
+  label: string;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
+      {children}
+      {error ? (
+        <span className="mt-1 block text-xs text-danger">{error}</span>
+      ) : hint ? (
+        <span className="mt-1 block text-xs text-faint">{hint}</span>
+      ) : null}
+    </label>
+  );
+}
+
+type InputProps = InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean };
+export function Input({ invalid, className, ...props }: InputProps) {
+  return <input className={cn(controlBase, "h-9", borderTone(invalid), className)} {...props} />;
+}
+
+type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean };
+export function Select({ invalid, className, ...props }: SelectProps) {
+  return <select className={cn(controlBase, "h-9", borderTone(invalid), className)} {...props} />;
+}
+
+type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean };
+export function Textarea({ invalid, className, ...props }: TextareaProps) {
+  return <textarea className={cn(controlBase, "py-2", borderTone(invalid), className)} {...props} />;
 }

@@ -5,18 +5,42 @@ const base = "/api/v1";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(base + path, { headers: { accept: "application/json" } });
+  return handle<T>(res);
+}
+
+// send performs a mutating request. Actor identity rides the X-Actor header (no
+// auth yet — the backend records it in the audit log); SSO/RBAC is the future
+// Pro tier.
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(base + path, {
+    method,
+    headers: { "content-type": "application/json", "x-actor": "web-ui", accept: "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return handle<T>(res);
+}
+
+// handle resolves a response, surfacing the backend's human error copy. A 204 /
+// empty body resolves to undefined (callers that expect void ignore it).
+async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try {
-      const body = await res.json();
-      if (body?.error) msg = body.error;
+      const errBody = await res.json();
+      if (errBody?.error) msg = errBody.error;
     } catch {
       /* keep the status message */
     }
     throw new Error(msg);
   }
-  return res.json() as Promise<T>;
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
+
+export const post = <T>(path: string, body?: unknown) => send<T>("POST", path, body);
+export const patch = <T>(path: string, body?: unknown) => send<T>("PATCH", path, body);
+export const del = (path: string) => send<void>("DELETE", path);
 
 export interface Pipeline {
   id: number;
@@ -89,8 +113,43 @@ export interface AuditEntry {
   created_at: string;
 }
 
+// --- write-side request/response shapes (mirror backend/internal/pipelines) ---
+
+export interface EndpointInput {
+  type: string;
+  settings: Record<string, string>;
+}
+
+export interface StreamInput {
+  name: string;
+  mode: string;
+  cursor_field?: string;
+}
+
+export interface CreatePipelineRequest {
+  name: string;
+  environment: string;
+  source: EndpointInput;
+  destination: EndpointInput;
+  schedule: string;
+  streams: StreamInput[];
+}
+
+export interface CreatedPipeline {
+  id: number;
+  name: string;
+  slug: string;
+  environment: string;
+  source_type: string;
+  destination_type: string;
+  status: string;
+  schedule: string;
+  current_version: number;
+}
+
 export const api = {
   pipelines: () => get<Pipeline[]>("/pipelines"),
+  createPipeline: (req: CreatePipelineRequest) => post<CreatedPipeline>("/pipelines", req),
   pipeline: (id: number) => get<Pipeline>(`/pipelines/${id}`),
   metrics: (id: number) => get<Metric[]>(`/pipelines/${id}/metrics`),
   diffs: (id: number) => get<DiffRun[]>(`/pipelines/${id}/diffs`),
