@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,16 +26,22 @@ type Lister interface {
 	Active(ctx context.Context) ([]Schedule, error)
 }
 
-// Trigger starts a run for one pipeline. The runner's Run adapts to this.
+// Trigger runs one pipeline to completion. It MUST block until the run finishes
+// so the scheduler can track in-flight runs and never overlap the same pipeline.
 type Trigger func(pipelineID int64)
 
-// Scheduler triggers due pipelines on a fixed tick.
+// Scheduler triggers due pipelines on a fixed tick, never overlapping a pipeline
+// with itself: a never-synced pipeline is "due" on every tick until it syncs, so
+// without in-flight tracking a slow run would be started repeatedly.
 type Scheduler struct {
 	lister   Lister
 	trigger  Trigger
 	interval time.Duration
 	now      func() time.Time
 	logger   *slog.Logger
+
+	mu      sync.Mutex
+	running map[int64]struct{}
 }
 
 // New builds a Scheduler. interval is how often it wakes to check due-ness.
@@ -48,7 +55,10 @@ func New(lister Lister, trigger Trigger, interval time.Duration, now func() time
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Scheduler{lister: lister, trigger: trigger, interval: interval, now: now, logger: logger}
+	return &Scheduler{
+		lister: lister, trigger: trigger, interval: interval, now: now, logger: logger,
+		running: map[int64]struct{}{},
+	}
 }
 
 // Run ticks until ctx is cancelled, triggering due pipelines each tick.
@@ -66,7 +76,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 }
 
 // tick performs one scheduling pass: list active pipelines and trigger the due
-// ones. Exposed for deterministic testing without a real ticker.
+// ones that are not already running. Each triggered run executes in its own
+// goroutine and clears its in-flight mark on completion. Exposed for
+// deterministic testing without a real ticker.
 func (s *Scheduler) tick(ctx context.Context) {
 	scheds, err := s.lister.Active(ctx)
 	if err != nil {
@@ -75,10 +87,35 @@ func (s *Scheduler) tick(ctx context.Context) {
 	}
 	now := s.now()
 	for _, sc := range scheds {
-		if isDue(sc.Cron, sc.LastSync, now) {
-			s.trigger(sc.PipelineID)
+		if !isDue(sc.Cron, sc.LastSync, now) {
+			continue
 		}
+		if !s.markRunning(sc.PipelineID) {
+			continue // already running — never overlap a pipeline with itself
+		}
+		id := sc.PipelineID
+		go func() {
+			defer s.clearRunning(id)
+			s.trigger(id)
+		}()
 	}
+}
+
+// markRunning records a pipeline as in-flight, returning false if it already was.
+func (s *Scheduler) markRunning(id int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.running[id]; ok {
+		return false
+	}
+	s.running[id] = struct{}{}
+	return true
+}
+
+func (s *Scheduler) clearRunning(id int64) {
+	s.mu.Lock()
+	delete(s.running, id)
+	s.mu.Unlock()
 }
 
 // isDue reports whether a pipeline should run now given its schedule and last

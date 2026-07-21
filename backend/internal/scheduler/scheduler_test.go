@@ -3,6 +3,8 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,15 +52,46 @@ func TestTickTriggersOnlyDuePipelines(t *testing.T) {
 		{PipelineID: 2, Cron: "@hourly", LastSync: tp("2026-07-21T11:59:00Z")}, // not due
 		{PipelineID: 3, Cron: "@daily", LastSync: nil},                         // due (never synced)
 	}}
+	var mu sync.Mutex
 	var triggered []int64
-	s := New(lister, func(id int64) { triggered = append(triggered, id) }, time.Minute,
+	s := New(lister, func(id int64) { mu.Lock(); triggered = append(triggered, id); mu.Unlock() }, time.Minute,
 		func() time.Time { return now }, slog.Default())
 
 	s.tick(context.Background())
-	require.ElementsMatch(t, []int64{1, 3}, triggered)
+	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(triggered) == 2 }, time.Second, 5*time.Millisecond)
+	mu.Lock()
+	got := append([]int64(nil), triggered...)
+	mu.Unlock()
+	require.ElementsMatch(t, []int64{1, 3}, got)
 }
 
 func mustTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+// TestNoOverlappingRuns proves a never-synced pipeline (due on every tick) is not
+// started again while its previous run is still in flight.
+func TestNoOverlappingRuns(t *testing.T) {
+	lister := fakeLister{scheds: []Schedule{{PipelineID: 1, Cron: "@hourly", LastSync: nil}}} // always due
+	release := make(chan struct{})
+	var starts int32
+	trigger := func(int64) {
+		atomic.AddInt32(&starts, 1)
+		<-release // block until released, simulating a slow run
+	}
+	s := New(lister, trigger, time.Minute, func() time.Time { return mustTime("2026-07-21T12:00:00Z") }, slog.Default())
+
+	// Three ticks while the first run is still blocked: only one run may start.
+	s.tick(context.Background())
+	s.tick(context.Background())
+	s.tick(context.Background())
+	require.Eventually(t, func() bool { return atomic.LoadInt32(&starts) == 1 }, time.Second, 5*time.Millisecond)
+	require.EqualValues(t, 1, atomic.LoadInt32(&starts), "only one run despite three ticks")
+
+	// Release the run; a later tick may start it again.
+	close(release)
+	require.Eventually(t, func() bool { return atomic.LoadInt32(&starts) == 1 }, 200*time.Millisecond, 5*time.Millisecond)
+	s.tick(context.Background())
+	require.Eventually(t, func() bool { return atomic.LoadInt32(&starts) == 2 }, time.Second, 5*time.Millisecond)
 }

@@ -150,13 +150,13 @@ func run(logger *slog.Logger) error {
 	}
 	anomalyWorker := anomaly.NewWorker(anomaly.NewPgSource(st.Pool), emitAnomaly, "rows_written", nil)
 
-	// trigger starts a run without blocking the scheduler's tick.
+	// trigger runs a pipeline to completion (blocking). The scheduler runs it in
+	// its own goroutine and tracks in-flight pipelines, so a slow run is never
+	// started again before it finishes.
 	trigger := func(id int64) {
-		go func() {
-			if _, err := run.Run(context.Background(), id); err != nil {
-				logger.Error("scheduled run failed", "pipeline_id", id, "err", err)
-			}
-		}()
+		if _, err := run.Run(context.Background(), id); err != nil {
+			logger.Error("scheduled run failed", "pipeline_id", id, "err", err)
+		}
 	}
 	sched := scheduler.New(scheduler.NewPgLister(st.Pool), trigger, 30*time.Second, nil, logger)
 
