@@ -1,5 +1,11 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { api, type BackfillRequest, type CreatePipelineRequest } from "./api";
+import {
+  api,
+  type BackfillRequest,
+  type CreateChannelRequest,
+  type CreatePipelineRequest,
+  type CreateRuleRequest,
+} from "./api";
 
 // Write-side hooks. Each invalidates the queries its mutation affects so the
 // dashboard reflects the change without a manual refresh. This is the plumbing
@@ -50,6 +56,39 @@ export function useBackfill(id: number) {
   return useMutation({
     mutationFn: (body: BackfillRequest) => api.backfillPipeline(id, body),
     onSuccess: () => refreshPipeline(qc, id),
+  });
+}
+
+// Channel + rule management (the alerting builder).
+export function useCreateChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateChannelRequest) => api.createChannel(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels"] }),
+  });
+}
+
+export function useDeleteChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteChannel(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels"] }),
+  });
+}
+
+export function useCreateRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: CreateRuleRequest) => api.createRule(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rules"] }),
+  });
+}
+
+export function useDeleteRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteRule(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rules"] }),
   });
 }
 

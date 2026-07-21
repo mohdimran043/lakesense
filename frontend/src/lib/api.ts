@@ -113,6 +113,38 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface Channel {
+  id: number;
+  name: string;
+  type: "slack" | "telegram" | "email" | "webhook";
+  enabled: boolean;
+}
+
+export interface Rule {
+  id: number;
+  pipeline_id: number | null;
+  pipeline: string;
+  name: string;
+  condition: { event?: string; field?: string; op?: string; value?: unknown };
+  severity: "info" | "warning" | "critical";
+  enabled: boolean;
+  channel_ids: number[];
+}
+
+export interface CreateChannelRequest {
+  name: string;
+  type: string;
+  config: Record<string, string>;
+}
+
+export interface CreateRuleRequest {
+  name: string;
+  condition: Record<string, unknown>;
+  severity: string;
+  channel_ids: number[];
+  pipeline_id?: number;
+}
+
 // --- write-side request/response shapes (mirror backend/internal/pipelines) ---
 
 export interface EndpointInput {
@@ -167,6 +199,12 @@ export const api = {
   ackIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/ack`),
   snoozeIncident: (id: number, until: string) => post<{ status: string }>(`/incidents/${id}/snooze`, { until }),
   resolveIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/resolve`),
+  channels: () => get<Channel[]>("/channels"),
+  rules: () => get<Rule[]>("/rules"),
+  createChannel: (req: CreateChannelRequest) => post<{ id: number }>("/channels", req),
+  deleteChannel: (id: number) => del(`/channels/${id}`),
+  createRule: (req: CreateRuleRequest) => post<{ id: number }>("/rules", req),
+  deleteRule: (id: number) => del(`/rules/${id}`),
   pipeline: (id: number) => get<Pipeline>(`/pipelines/${id}`),
   metrics: (id: number) => get<Metric[]>(`/pipelines/${id}/metrics`),
   diffs: (id: number) => get<DiffRun[]>(`/pipelines/${id}/diffs`),

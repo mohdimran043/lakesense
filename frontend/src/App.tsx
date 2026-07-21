@@ -5,6 +5,7 @@ import { Pipelines } from "./pages/Pipelines";
 import { CreatePipeline } from "./pages/CreatePipeline";
 import { PipelineDetail } from "./pages/PipelineDetail";
 import { Incidents } from "./pages/Incidents";
+import { Alerts } from "./pages/Alerts";
 import { Diff } from "./pages/Diff";
 import { Analytics } from "./pages/Analytics";
 import { Audit } from "./pages/Audit";
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/pipelines/new" element={<CreatePipeline />} />
         <Route path="/pipelines/:id" element={<PipelineDetail />} />
         <Route path="/incidents" element={<Incidents />} />
+        <Route path="/alerts" element={<Alerts />} />
         <Route path="/diff" element={<Diff />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/audit" element={<Audit />} />

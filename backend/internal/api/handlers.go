@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,6 +24,68 @@ func (s *Server) registerData(r chi.Router) {
 	r.Get("/incidents", s.listIncidents)
 	r.Get("/analytics", s.analytics)
 	r.Get("/audit", s.auditLog)
+	r.Get("/channels", s.listChannels)
+	r.Get("/rules", s.listRules)
+}
+
+func (s *Server) listChannels(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT id, name, type, enabled FROM channels ORDER BY name`)
+	if err != nil {
+		writeErr(w, "query channels", err)
+		return
+	}
+	defer rows.Close()
+	type channel struct {
+		ID      int64  `json:"id"`
+		Name    string `json:"name"`
+		Type    string `json:"type"`
+		Enabled bool   `json:"enabled"`
+	}
+	var out []channel
+	for rows.Next() {
+		var c channel
+		if err := rows.Scan(&c.ID, &c.Name, &c.Type, &c.Enabled); err != nil {
+			writeErr(w, "scan channel", err)
+			return
+		}
+		out = append(out, c)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) listRules(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT r.id, r.pipeline_id, COALESCE(p.name,''), r.name, r.condition,
+		        r.severity, r.enabled, r.channel_ids
+		 FROM rules r LEFT JOIN pipelines p ON p.id = r.pipeline_id
+		 ORDER BY r.id DESC`)
+	if err != nil {
+		writeErr(w, "query rules", err)
+		return
+	}
+	defer rows.Close()
+	type rule struct {
+		ID         int64           `json:"id"`
+		PipelineID *int64          `json:"pipeline_id"`
+		Pipeline   string          `json:"pipeline"`
+		Name       string          `json:"name"`
+		Condition  json.RawMessage `json:"condition"`
+		Severity   string          `json:"severity"`
+		Enabled    bool            `json:"enabled"`
+		ChannelIDs []int64         `json:"channel_ids"`
+	}
+	var out []rule
+	for rows.Next() {
+		var x rule
+		if err := rows.Scan(&x.ID, &x.PipelineID, &x.Pipeline, &x.Name, &x.Condition,
+			&x.Severity, &x.Enabled, &x.ChannelIDs); err != nil {
+			writeErr(w, "scan rule", err)
+			return
+		}
+		out = append(out, x)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // Pipeline is the list/detail view model, enriched with derived health.

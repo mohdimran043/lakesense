@@ -17,3 +17,5 @@ export const useLineage = (id: number) =>
 export const useIncidents = () => useQuery({ queryKey: ["incidents"], queryFn: api.incidents, ...opts });
 export const useAnalytics = () => useQuery({ queryKey: ["analytics"], queryFn: api.analytics, ...opts });
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit, ...opts });
+export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: api.channels, ...opts });
+export const useRules = () => useQuery({ queryKey: ["rules"], queryFn: api.rules, ...opts });
