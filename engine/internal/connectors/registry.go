@@ -3,6 +3,7 @@
 package connectors
 
 import (
+	"github.com/lakesense/lakesense/engine/internal/connectors/mysql"
 	"github.com/lakesense/lakesense/engine/internal/connectors/postgres"
 	"github.com/lakesense/lakesense/engine/internal/connectors/sqlite"
 	"github.com/lakesense/lakesense/engine/internal/sdk"
@@ -12,6 +13,7 @@ import (
 func Default() *sdk.Registry {
 	r := sdk.NewRegistry()
 	r.Register(postgres.Type, postgres.New)
+	r.Register(mysql.Type, mysql.New)
 	r.Register(sqlite.Type, sqlite.New)
 	return r
 }
