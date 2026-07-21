@@ -74,10 +74,14 @@ never cite anyone else's numbers as ours.
 > `POST /api/v1/pipelines` (with automatic config versioning + audit on every
 > change), then `POST /api/v1/pipelines/{id}/run` to execute one: the backend
 > drives `lsengine` (discover → sync) and ingests the event stream, so real
-> health, diff badges, and lineage flow into the dashboard. The **engine CLI**
-> (`lsengine`) flow below still works directly too (tested by
-> `scripts/verify-migration.sh`). Still landing next: automatic scheduling of
-> runs and the in-dashboard **create-pipeline wizard** (consumes the write API).
+> health, diff badges, and lineage flow into the dashboard. Runs also fire
+> **automatically on a schedule** (`@hourly`/`@daily`/`@every 5m`), every
+> ingested event is evaluated against your **rules** to open deduplicated
+> **incidents** and dispatch **alerts**, and the API exposes the operational
+> surface: incident `ack`/`snooze`/`resolve`, rule + channel management, config
+> export, and `POST /pipelines/{id}/backfill`. The **engine CLI** (`lsengine`)
+> flow below still works directly too (tested by `scripts/verify-migration.sh`).
+> Landing next: the in-dashboard **create-pipeline wizard** (consumes the write API).
 
 A pipeline is three JSON files — a source, a destination, and a stream catalog —
 driven through four verbs: `spec` (see a connector's config schema), `check`
