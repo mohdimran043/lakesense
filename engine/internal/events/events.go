@@ -40,6 +40,7 @@ const (
 	KindSchemaDiscovered Kind = "schema_discovered" // SchemaDiscovered
 	KindSchemaChanged    Kind = "schema_changed"    // SchemaChanged
 	KindColumnMapping    Kind = "column_mapping"    // ColumnMapping: feeds lineage
+	KindColumnStats      Kind = "column_stats"      // ColumnStats: feeds quality monitors
 	// Correctness (feeds data-diff).
 	KindChecksumComputed Kind = "checksum_computed" // Checksum
 	KindVerifyResult     Kind = "verify_result"     // VerifyResult
@@ -160,6 +161,22 @@ type ColumnMapping struct {
 	SourceType   string `json:"source_type"`
 	DestColumn   string `json:"dest_column"`
 	DestType     string `json:"dest_type"`
+}
+
+// ColumnStat is one column's per-sync statistics — the raw material the quality
+// monitors (null-rate, volume, distribution) evaluate against learned baselines.
+type ColumnStat struct {
+	Column   string `json:"column"`
+	Rows     int64  `json:"rows"`
+	Nulls    int64  `json:"nulls"`
+	Distinct int64  `json:"distinct"` // exact up to a cap, then reported as the cap
+	Min      string `json:"min,omitempty"`
+	Max      string `json:"max,omitempty"`
+}
+
+// ColumnStats carries every data column's stats for one stream in one sync.
+type ColumnStats struct {
+	Columns []ColumnStat `json:"columns"`
 }
 
 // Checksum reports an order-independent aggregate over rows on one side of a

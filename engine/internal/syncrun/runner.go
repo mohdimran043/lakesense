@@ -38,6 +38,9 @@ type runner struct {
 	totalRead  int64
 	totalWrite int64
 	totalBytes int64
+	// colStats accumulates per-column statistics per stream, feeding the
+	// column_stats event that drives the quality monitors.
+	colStats map[string]*streamColStats
 }
 
 // Run executes a full sync per the catalog's stream selections. It is the
@@ -52,7 +55,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := opts.Catalog.Validate(); err != nil {
 		return fmt.Errorf("catalog: %w", err)
 	}
-	r := &runner{opts: opts, now: opts.Now}
+	r := &runner{opts: opts, now: opts.Now, colStats: map[string]*streamColStats{}}
 	return r.run(ctx)
 }
 
@@ -377,6 +380,7 @@ func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.St
 		return err
 	}
 	src.add(h)
+	r.observeStats(stream, cols, row)
 	r.injectMetadata(row, stream, op, cdcTS)
 	if err := sw.WriteRow(ctx, row); err != nil {
 		return err
@@ -387,6 +391,17 @@ func (r *runner) handleRow(ctx context.Context, sw StreamWriter, stream model.St
 	r.totalRead++
 	r.totalWrite++
 	return nil
+}
+
+// observeStats folds a row's data columns into the stream's stats accumulator
+// (created on first sight), before metadata injection so only data columns count.
+func (r *runner) observeStats(stream model.Stream, cols []string, row sdk.Row) {
+	cs := r.colStats[stream.ID()]
+	if cs == nil {
+		cs = newStreamColStats()
+		r.colStats[stream.ID()] = cs
+	}
+	cs.observe(row, cols)
 }
 
 // injectMetadata stamps the engine-owned _ls_ columns. recordID is computed
@@ -423,6 +438,11 @@ func (r *runner) closeAndReport(ctx context.Context, stream model.Stream, sw Str
 		Side: "destination", Rows: res.Rows, Checksum: res.Checksum, Columns: cols,
 	}); err != nil {
 		return err
+	}
+	if cs := r.colStats[stream.ID()]; cs != nil {
+		if err := r.emit(events.KindColumnStats, stream.ID(), cs.result()); err != nil {
+			return err
+		}
 	}
 	return r.emit(events.KindStreamFinished, stream.ID(), events.StreamFinished{
 		Mode: string(mode), RowsRead: src.Rows(), RowsWritten: res.Rows, BytesWritten: res.Bytes,
