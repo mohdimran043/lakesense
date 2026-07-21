@@ -100,4 +100,11 @@ func TestAdminIncidentAck(t *testing.T) {
 	// Acking an already-acked incident → 404 (not in a valid state).
 	rec = do(t, h, http.MethodPost, "/api/v1/incidents/1/ack", nil)
 	require.Equal(t, http.StatusNotFound, rec.Code)
+
+	// An acked incident can still be resolved (regression guard: resolve binds
+	// only $1, so passing an actor arg would 404).
+	rec = do(t, h, http.MethodPost, "/api/v1/incidents/1/resolve", nil)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, pool.QueryRow(ctx, `SELECT status FROM incidents WHERE id=$1`, incID).Scan(&status))
+	require.Equal(t, "resolved", status)
 }

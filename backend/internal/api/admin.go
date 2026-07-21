@@ -84,13 +84,15 @@ func (s *Server) audited(r *http.Request, action, entityType, entityID string, a
 // --- incident actions ---
 
 func (s *Server) ackIncident(w http.ResponseWriter, r *http.Request) {
-	s.transitionIncident(w, r, "ack", "acked",
+	// ack stamps acked_by ($2), so it takes the actor argument.
+	s.transitionIncident(w, r, "ack", "acked", true,
 		`UPDATE incidents SET status='acked', acked_at=now(), acked_by=$2
 		 WHERE id=$1 AND status IN ('open','snoozed') RETURNING id`)
 }
 
 func (s *Server) resolveIncident(w http.ResponseWriter, r *http.Request) {
-	s.transitionIncident(w, r, "resolve", "resolved",
+	// resolve takes only the id ($1) — no actor column, so needsActor is false.
+	s.transitionIncident(w, r, "resolve", "resolved", false,
 		`UPDATE incidents SET status='resolved', resolved_at=now()
 		 WHERE id=$1 AND status IN ('open','acked','snoozed') RETURNING id`)
 }
@@ -123,14 +125,20 @@ func (s *Server) snoozeIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 // transitionIncident runs a status-changing UPDATE that RETURNs the id, records
-// an ack row + audit, and maps a no-row result to 404.
-func (s *Server) transitionIncident(w http.ResponseWriter, r *http.Request, action, status, sql string) {
+// an ack row + audit, and maps a no-row result to 404. needsActor selects
+// whether the SQL binds the actor as $2 (ack stamps acked_by; resolve does not).
+func (s *Server) transitionIncident(w http.ResponseWriter, r *http.Request, action, status string, needsActor bool, sql string) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
 	var gotID int64
-	err := s.pool.QueryRow(r.Context(), sql, id, actor(r)).Scan(&gotID)
+	var err error
+	if needsActor {
+		err = s.pool.QueryRow(r.Context(), sql, id, actor(r)).Scan(&gotID)
+	} else {
+		err = s.pool.QueryRow(r.Context(), sql, id).Scan(&gotID)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "incident not found or not in a valid state"})
 		return
