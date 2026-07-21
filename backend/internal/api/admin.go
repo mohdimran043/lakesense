@@ -32,6 +32,47 @@ func (s *Server) registerAdmin(r chi.Router) {
 	r.Post("/escalation-policies", s.createEscalationPolicy)
 	r.Post("/oncall-schedules", s.createOncallSchedule)
 	r.Post("/pipelines/{id}/promote", s.promotePipeline)
+	r.Post("/quality-monitors", s.createQualityMonitor)
+}
+
+var qualityKinds = map[string]bool{"freshness": true, "volume": true, "null_rate": true, "distribution": true}
+
+func (s *Server) createQualityMonitor(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PipelineID int64           `json:"pipeline_id"`
+		Stream     string          `json:"stream"`
+		Column     string          `json:"column"`
+		Kind       string          `json:"kind"`
+		Config     json.RawMessage `json:"config"`
+		Baseline   json.RawMessage `json:"baseline"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	if req.PipelineID == 0 || req.Stream == "" || !qualityKinds[req.Kind] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pipeline_id, stream, and a valid kind (freshness|volume|null_rate|distribution) are required"})
+		return
+	}
+	config := req.Config
+	if len(config) == 0 {
+		config = json.RawMessage(`{}`)
+	}
+	baseline := req.Baseline
+	if len(baseline) == 0 {
+		baseline = json.RawMessage(`{}`)
+	}
+	var id int64
+	err := s.pool.QueryRow(r.Context(),
+		`INSERT INTO quality_monitors (pipeline_id, stream, column_name, kind, config, baseline)
+		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+		req.PipelineID, req.Stream, req.Column, req.Kind, config, baseline).Scan(&id)
+	if err != nil {
+		writeErr(w, "create quality monitor", err)
+		return
+	}
+	s.audited(r, "quality_monitor.create", "quality_monitor", itoa(id), map[string]any{"kind": req.Kind, "stream": req.Stream})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
 // promotePipeline clones a pipeline's latest config into a target environment

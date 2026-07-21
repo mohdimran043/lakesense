@@ -25,6 +25,7 @@ import (
 	"github.com/lakesense/lakesense/backend/internal/collector"
 	"github.com/lakesense/lakesense/backend/internal/config"
 	"github.com/lakesense/lakesense/backend/internal/escalation"
+	"github.com/lakesense/lakesense/backend/internal/quality"
 	"github.com/lakesense/lakesense/backend/internal/rules"
 	"github.com/lakesense/lakesense/backend/internal/runner"
 	"github.com/lakesense/lakesense/backend/internal/scheduler"
@@ -152,6 +153,16 @@ func run(logger *slog.Logger) error {
 	}
 	anomalyWorker := anomaly.NewWorker(anomaly.NewPgSource(st.Pool), emitAnomaly, "rows_written", nil)
 
+	// Quality monitors: evaluate freshness/volume/null-rate against learned
+	// baselines and emit a quality_breach event down the same rules→alert path.
+	emitQuality := func(ctx context.Context, pipelineID int64, m quality.Monitor, r quality.Result) error {
+		ev := fmt.Sprintf(`{"v":1,"event":"quality_breach","pipeline_id":%d,"stream":%q,"payload":{"monitor_id":%d,"kind":%q,"column":%q,"value":%g,"detail":%q}}`,
+			pipelineID, m.Stream, m.ID, m.Kind, m.Column, r.Value, r.Detail)
+		_, err := ingest(ctx, pipelineID, strings.NewReader(ev))
+		return err
+	}
+	qualityWorker := quality.NewWorker(quality.NewPgStore(st.Pool), emitQuality, nil)
+
 	// trigger runs a pipeline to completion (blocking). The scheduler runs it in
 	// its own goroutine and tracks in-flight pipelines, so a slow run is never
 	// started again before it finishes.
@@ -213,6 +224,23 @@ func run(logger *slog.Logger) error {
 			case <-t.C:
 				if err := anomalyWorker.Tick(gctx); err != nil {
 					logger.Error("anomaly tick", "err", err)
+				}
+			}
+		}
+	})
+
+	// Quality monitors: evaluate on a slower tick.
+	g.Go(func() error {
+		logger.Info("quality worker started", "interval", "2m")
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-t.C:
+				if err := qualityWorker.Tick(gctx); err != nil {
+					logger.Error("quality tick", "err", err)
 				}
 			}
 		}

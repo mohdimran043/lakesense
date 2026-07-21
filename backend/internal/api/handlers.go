@@ -29,6 +29,42 @@ func (s *Server) registerData(r chi.Router) {
 	r.Get("/escalation-policies", s.listEscalationPolicies)
 	r.Get("/oncall-schedules", s.listOncallSchedules)
 	r.Get("/pipelines/{id}/backfills", s.listBackfills)
+	r.Get("/quality-monitors", s.listQualityMonitors)
+}
+
+func (s *Server) listQualityMonitors(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT m.id, m.pipeline_id, COALESCE(p.name,''), m.stream, m.column_name, m.kind,
+		        m.config, m.baseline, m.enabled
+		 FROM quality_monitors m LEFT JOIN pipelines p ON p.id = m.pipeline_id
+		 ORDER BY m.id DESC`)
+	if err != nil {
+		writeErr(w, "query quality monitors", err)
+		return
+	}
+	defer rows.Close()
+	type monitor struct {
+		ID         int64           `json:"id"`
+		PipelineID int64           `json:"pipeline_id"`
+		Pipeline   string          `json:"pipeline"`
+		Stream     string          `json:"stream"`
+		Column     string          `json:"column"`
+		Kind       string          `json:"kind"`
+		Config     json.RawMessage `json:"config"`
+		Baseline   json.RawMessage `json:"baseline"`
+		Enabled    bool            `json:"enabled"`
+	}
+	var out []monitor
+	for rows.Next() {
+		var m monitor
+		if err := rows.Scan(&m.ID, &m.PipelineID, &m.Pipeline, &m.Stream, &m.Column, &m.Kind,
+			&m.Config, &m.Baseline, &m.Enabled); err != nil {
+			writeErr(w, "scan monitor", err)
+			return
+		}
+		out = append(out, m)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) listEscalationPolicies(w http.ResponseWriter, r *http.Request) {
