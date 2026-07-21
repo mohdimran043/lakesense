@@ -121,7 +121,9 @@ func run(logger *slog.Logger) error {
 	escWorker := escalation.NewWorker(escalation.NewPgStore(st.Pool), escalation.NewPgPolicies(st.Pool),
 		escalation.NewPgSchedules(st.Pool), notifier, nil)
 	ruleEngine := rules.NewEngine(rules.NewPgStore(st.Pool), notifier, nil)
-	ruleLoader := rules.NewPgLoader(st.Pool)
+	// Cache rule sets briefly: the processor evaluates every ingested event, so a
+	// single sync would otherwise issue one rule query per event.
+	ruleLoader := rules.NewCachedLoader(rules.NewPgLoader(st.Pool), 10*time.Second)
 	process := func(ctx context.Context, pipelineID int64, e collector.Event) {
 		ruleSet, err := ruleLoader.LoadRules(ctx, pipelineID)
 		if err != nil {
