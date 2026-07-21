@@ -35,14 +35,38 @@ type DiffRun struct {
 	Match          bool
 }
 
+// Processor is an optional post-persist hook: after an event is stored and
+// derived, the Ingester hands it here so the live intelligence layer (rules →
+// incidents → alerts, anomaly, quality) can react. Defined here (consumer side)
+// and injected, so the collector never depends on the rules packages. A
+// processor error is logged by the implementation, never fatal to ingestion.
+type Processor func(ctx context.Context, pipelineID int64, e Event)
+
 // Ingester consumes a JSONL event stream for one pipeline run and persists
-// raw + derived rows through a Sink.
+// raw + derived rows through a Sink, optionally forwarding each event to a
+// Processor for live reaction.
 type Ingester struct {
 	sink Sink
+	proc Processor
 }
 
-// NewIngester constructs an Ingester over the given sink.
-func NewIngester(sink Sink) *Ingester { return &Ingester{sink: sink} }
+// NewIngester constructs an Ingester over the given sink. Options attach an
+// optional live Processor.
+func NewIngester(sink Sink, opts ...Option) *Ingester {
+	i := &Ingester{sink: sink}
+	for _, o := range opts {
+		o(i)
+	}
+	return i
+}
+
+// Option configures an Ingester.
+type Option func(*Ingester)
+
+// WithProcessor forwards each persisted event to proc for live reaction.
+func WithProcessor(proc Processor) Option {
+	return func(i *Ingester) { i.proc = proc }
+}
 
 // checksumPair accumulates the two sides of a stream's checksum until both are
 // seen, at which point a diff_run is emitted.
@@ -78,6 +102,9 @@ func (i *Ingester) Ingest(ctx context.Context, pipelineID int64, r io.Reader) (i
 		stored++
 		if err := i.derive(ctx, pipelineID, e, pairs); err != nil {
 			return stored, err
+		}
+		if i.proc != nil {
+			i.proc(ctx, pipelineID, e)
 		}
 	}
 	if err := sc.Err(); err != nil {

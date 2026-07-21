@@ -20,8 +20,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lakesense/lakesense/backend/internal/api"
+	"github.com/lakesense/lakesense/backend/internal/channels"
 	"github.com/lakesense/lakesense/backend/internal/collector"
 	"github.com/lakesense/lakesense/backend/internal/config"
+	"github.com/lakesense/lakesense/backend/internal/rules"
 	"github.com/lakesense/lakesense/backend/internal/runner"
 	"github.com/lakesense/lakesense/backend/internal/scheduler"
 	"github.com/lakesense/lakesense/backend/internal/seed"
@@ -109,9 +111,28 @@ func run(logger *slog.Logger) error {
 	}
 	defer st.Close()
 
+	// Live intelligence: every ingested event is evaluated against the pipeline's
+	// rules, opening deduplicated incidents and dispatching alerts through the
+	// channel adapters. This is the one alerting path (spec 4.2–4.4) now running
+	// on real events, not just unit tests.
+	notifier := channels.New(channels.NewPgResolver(st.Pool), nil, nil)
+	ruleEngine := rules.NewEngine(rules.NewPgStore(st.Pool), notifier, nil)
+	ruleLoader := rules.NewPgLoader(st.Pool)
+	process := func(ctx context.Context, pipelineID int64, e collector.Event) {
+		ruleSet, err := ruleLoader.LoadRules(ctx, pipelineID)
+		if err != nil {
+			logger.Error("load rules", "pipeline_id", pipelineID, "err", err)
+			return
+		}
+		if err := ruleEngine.Evaluate(ctx, pipelineID, e, ruleSet); err != nil {
+			logger.Error("evaluate rules", "pipeline_id", pipelineID, "err", err)
+		}
+	}
+
 	// The runner executes pipelines: it drives lsengine and pipes the event
-	// stream through the collector ingester (the same path seed uses).
-	ingest := collector.NewIngester(collector.NewPgSink(st.Pool)).Ingest
+	// stream through the collector ingester (the same path seed uses), now with
+	// the live rule processor attached.
+	ingest := collector.NewIngester(collector.NewPgSink(st.Pool), collector.WithProcessor(process)).Ingest
 	run := runner.New(runner.NewExecEngine(cfg.EnginePath), ingest, runner.NewPgLoader(st.Pool), cfg.DataDir, nil)
 
 	// trigger starts a run without blocking the scheduler's tick.
