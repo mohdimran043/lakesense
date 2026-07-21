@@ -52,7 +52,7 @@ tier — the open-core line. Everything else is Apache-2.0.
 ## Quickstart (≤ 5 commands)
 
 ```bash
-git clone https://github.com/lakesense/lakesense && cd lakesense/deploy
+git clone https://github.com/mohdimran043/lakesense && cd lakesense/deploy
 cp .env.example .env
 docker compose up -d                         # migrations run on start
 docker compose run --rm backend seed --days 14   # realistic demo data, no live DB needed

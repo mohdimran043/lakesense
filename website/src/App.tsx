@@ -6,7 +6,7 @@ import { Architecture, Benchmarks, FAQ, Footer, PaywallBuster, Pricing, Problem,
 // after first paint, over the static poster.
 const Hero3D = lazy(() => import("./scene/Hero3D").then((m) => ({ default: m.Hero3D })));
 
-const REPO = "https://github.com/lakesense/lakesense";
+const REPO = "https://github.com/mohdimran043/lakesense";
 
 export default function App() {
   const [scene, setScene] = useState(false);
