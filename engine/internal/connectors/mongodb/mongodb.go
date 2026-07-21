@@ -80,10 +80,9 @@ func New() sdk.Connector { return &Connector{} }
 // Spec implements sdk.Connector.
 func (c *Connector) Spec() sdk.Spec {
 	return sdk.Spec{
-		Type:        Type,
-		DisplayName: "MongoDB",
-		// Change-stream CDC joins the declaration once its battery passes.
-		Capabilities: []sdk.Capability{sdk.CapFullLoad, sdk.CapIncremental},
+		Type:         Type,
+		DisplayName:  "MongoDB",
+		Capabilities: []sdk.Capability{sdk.CapFullLoad, sdk.CapIncremental, sdk.CapCDC},
 		Maturity:     sdk.MaturityStable,
 		ConfigSchema: json.RawMessage(configSchema),
 	}
@@ -147,7 +146,7 @@ func (c *Connector) Discover(ctx context.Context) ([]model.Stream, error) {
 			Namespace:          c.cfg.Database,
 			Name:               name,
 			Schema:             schema,
-			SupportedSyncModes: []model.SyncMode{model.ModeFullLoad, model.ModeIncremental},
+			SupportedSyncModes: []model.SyncMode{model.ModeFullLoad, model.ModeIncremental, model.ModeCDC},
 			DefaultCursorField: suggestCursor(schema),
 		})
 	}
