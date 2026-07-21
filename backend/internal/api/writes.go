@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,7 +10,14 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/lakesense/lakesense/backend/internal/pipelines"
+	"github.com/lakesense/lakesense/backend/internal/runner"
 )
+
+// pipelineRunner triggers a pipeline run. Implemented by *runner.Runner; faked
+// in tests.
+type pipelineRunner interface {
+	Run(ctx context.Context, id int64) (runner.RunResult, error)
+}
 
 // registerWrites mounts the pipeline write endpoints. The read API (registerData)
 // stays untouched; writes are additive.
@@ -20,6 +28,22 @@ func (s *Server) registerWrites(r chi.Router) {
 	r.Post("/pipelines/{id}/resume", s.statusSetter("active"))
 	r.Delete("/pipelines/{id}", s.archivePipeline)
 	r.Post("/pipelines/{id}/rollback/{version}", s.rollbackPipeline)
+	r.Post("/pipelines/{id}/run", s.runPipeline)
+}
+
+// runPipeline launches a pipeline run in the background and returns 202. The run
+// uses its own context (not the request's) so it survives the response.
+func (s *Server) runPipeline(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	go func() {
+		if _, err := s.runner.Run(context.Background(), id); err != nil {
+			s.logger.Error("pipeline run failed", "pipeline_id", id, "err", err)
+		}
+	}()
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "started", "pipeline_id": id})
 }
 
 // actor reads the X-Actor header, defaulting to "system" (no auth in B1).

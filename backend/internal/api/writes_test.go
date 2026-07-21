@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/lakesense/lakesense/backend/internal/audit"
 	"github.com/lakesense/lakesense/backend/internal/configver"
 	"github.com/lakesense/lakesense/backend/internal/pipelines"
+	"github.com/lakesense/lakesense/backend/internal/runner"
 )
 
 // memRepo is a minimal in-memory pipelines.Repo for handler tests.
@@ -92,6 +94,43 @@ func TestCreatePipelineValidation400(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testServer().ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// fakeRunner records Run calls for the handler test.
+type fakeRunner struct {
+	mu       sync.Mutex
+	ran      []int64
+	notFound bool
+}
+
+func (f *fakeRunner) Run(_ context.Context, id int64) (runner.RunResult, error) {
+	f.mu.Lock()
+	f.ran = append(f.ran, id)
+	f.mu.Unlock()
+	if f.notFound {
+		return runner.RunResult{}, &runner.NotFoundError{ID: id}
+	}
+	return runner.RunResult{Events: 3}, nil
+}
+
+func (f *fakeRunner) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.ran)
+}
+
+func TestRunEndpointAccepts202(t *testing.T) {
+	fr := &fakeRunner{}
+	svc := pipelines.NewService(newMemRepo(), nopRecorder{}, func() time.Time { return time.Unix(0, 0).UTC() })
+	s := &Server{logger: slog.Default(), pipelines: svc, runner: fr}
+	h := chiRouter(s)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pipelines/1/run", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+
+	require.Eventually(t, func() bool { return fr.count() == 1 }, time.Second, 5*time.Millisecond)
 }
 
 func TestUpdateNotFound404(t *testing.T) {

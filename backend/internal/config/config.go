@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -18,6 +19,8 @@ type Config struct {
 	DatabaseURL string
 	// EnginePath is the lsengine binary invoked per pipeline run.
 	EnginePath string
+	// DataDir is the root for per-pipeline run scratch (configs, state, output).
+	DataDir string
 	// AnthropicAPIKey enables LLM enrichment; empty ⇒ graceful non-LLM fallback.
 	AnthropicAPIKey string
 	// AnthropicModel is the model id used for enrichment.
@@ -34,6 +37,7 @@ func Load() (Config, error) {
 		HTTPAddr:        env("LAKESENSE_HTTP_ADDR", ":8080"),
 		DatabaseURL:     os.Getenv("LAKESENSE_DATABASE_URL"),
 		EnginePath:      env("LAKESENSE_ENGINE_PATH", "lsengine"),
+		DataDir:         env("LAKESENSE_DATA_DIR", filepath.Join(os.TempDir(), "lakesense")),
 		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
 		AnthropicModel:  env("LAKESENSE_ANTHROPIC_MODEL", "claude-opus-4-8"),
 		ShutdownTimeout: 15 * time.Second,

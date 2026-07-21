@@ -15,7 +15,7 @@ import (
 // health and version handlers do not touch the pool, so they are testable
 // without a database — the fast path that runs in every CI push.
 func TestHealthAndVersion(t *testing.T) {
-	h := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 
 	t.Run("healthz", func(t *testing.T) {
 		rec := httptest.NewRecorder()

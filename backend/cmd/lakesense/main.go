@@ -20,7 +20,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lakesense/lakesense/backend/internal/api"
+	"github.com/lakesense/lakesense/backend/internal/collector"
 	"github.com/lakesense/lakesense/backend/internal/config"
+	"github.com/lakesense/lakesense/backend/internal/runner"
 	"github.com/lakesense/lakesense/backend/internal/seed"
 	"github.com/lakesense/lakesense/backend/internal/store"
 )
@@ -106,9 +108,14 @@ func run(logger *slog.Logger) error {
 	}
 	defer st.Close()
 
+	// The runner executes pipelines: it drives lsengine and pipes the event
+	// stream through the collector ingester (the same path seed uses).
+	ingest := collector.NewIngester(collector.NewPgSink(st.Pool)).Ingest
+	run := runner.New(runner.NewExecEngine(cfg.EnginePath), ingest, runner.NewPgLoader(st.Pool), cfg.DataDir, nil)
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(st.Pool, logger),
+		Handler:           api.New(st.Pool, logger, run),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
