@@ -187,6 +187,12 @@ export interface BackfillRequest {
   since_value?: string;
 }
 
+export interface PromoteRequest {
+  target_env: string;
+  source_overrides?: Record<string, string>;
+  destination_overrides?: Record<string, string>;
+}
+
 export const api = {
   pipelines: () => get<Pipeline[]>("/pipelines"),
   createPipeline: (req: CreatePipelineRequest) => post<CreatedPipeline>("/pipelines", req),
@@ -196,6 +202,7 @@ export const api = {
   archivePipeline: (id: number) => del(`/pipelines/${id}`),
   backfillPipeline: (id: number, body: BackfillRequest) =>
     post<{ status: string; job_id: number }>(`/pipelines/${id}/backfill`, body),
+  promotePipeline: (id: number, body: PromoteRequest) => post<CreatedPipeline>(`/pipelines/${id}/promote`, body),
   ackIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/ack`),
   snoozeIncident: (id: number, until: string) => post<{ status: string }>(`/incidents/${id}/snooze`, { until }),
   resolveIncident: (id: number) => post<{ status: string }>(`/incidents/${id}/resolve`),

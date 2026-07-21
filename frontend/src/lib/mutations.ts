@@ -5,6 +5,7 @@ import {
   type CreateChannelRequest,
   type CreatePipelineRequest,
   type CreateRuleRequest,
+  type PromoteRequest,
 } from "./api";
 
 // Write-side hooks. Each invalidates the queries its mutation affects so the
@@ -56,6 +57,14 @@ export function useBackfill(id: number) {
   return useMutation({
     mutationFn: (body: BackfillRequest) => api.backfillPipeline(id, body),
     onSuccess: () => refreshPipeline(qc, id),
+  });
+}
+
+export function usePromotePipeline(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PromoteRequest) => api.promotePipeline(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pipelines"] }),
   });
 }
 

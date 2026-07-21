@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pause, Play, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowUpRight, Pause, Play, RotateCcw, Trash2 } from "lucide-react";
 import { Button, Field, Input, Modal, Select } from "./ui";
-import { useArchivePipeline, useBackfill, useRunPipeline, useSetPipelineStatus } from "../lib/mutations";
+import {
+  useArchivePipeline,
+  useBackfill,
+  usePromotePipeline,
+  useRunPipeline,
+  useSetPipelineStatus,
+} from "../lib/mutations";
 import type { BackfillRequest } from "../lib/api";
 
 // PipelineActions is the command bar on a pipeline's detail page: run now, pause/
@@ -11,7 +17,7 @@ import type { BackfillRequest } from "../lib/api";
 export function PipelineActions({ id, name, status }: { id: number; name: string; status: string }) {
   const run = useRunPipeline(id);
   const setStatus = useSetPipelineStatus(id);
-  const [modal, setModal] = useState<"backfill" | "delete" | null>(null);
+  const [modal, setModal] = useState<"backfill" | "promote" | "delete" | null>(null);
   const [ranFlash, setRanFlash] = useState(false);
 
   const triggerRun = () =>
@@ -41,6 +47,9 @@ export function PipelineActions({ id, name, status }: { id: number; name: string
       <Button variant="outline" size="sm" onClick={() => setModal("backfill")}>
         <RotateCcw size={13} /> Backfill
       </Button>
+      <Button variant="outline" size="sm" onClick={() => setModal("promote")}>
+        <ArrowUpRight size={13} /> Promote
+      </Button>
       <Button variant="ghost" size="sm" className="text-danger hover:text-danger" onClick={() => setModal("delete")}>
         <Trash2 size={13} /> Archive
       </Button>
@@ -48,6 +57,7 @@ export function PipelineActions({ id, name, status }: { id: number; name: string
       {run.isError && <span className="text-xs text-danger">{(run.error as Error).message}</span>}
 
       {modal === "backfill" && <BackfillModal id={id} onClose={() => setModal(null)} />}
+      {modal === "promote" && <PromoteModal id={id} onClose={() => setModal(null)} />}
       {modal === "delete" && <ArchiveModal id={id} name={name} onClose={() => setModal(null)} />}
     </div>
   );
@@ -112,6 +122,65 @@ function BackfillModal({ id, onClose }: { id: number; onClose: () => void }) {
           </Button>
           <Button variant="primary" size="sm" disabled={!valid || backfill.isPending} onClick={submit}>
             {backfill.isPending ? "Launching…" : "Launch backfill"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PromoteModal({ id, onClose }: { id: number; onClose: () => void }) {
+  const promote = usePromotePipeline(id);
+  const nav = useNavigate();
+  const [target, setTarget] = useState("prod");
+  const [host, setHost] = useState("");
+  const [password, setPassword] = useState("");
+  const [destPath, setDestPath] = useState("");
+
+  const submit = () => {
+    const src: Record<string, string> = {};
+    if (host.trim()) src.host = host.trim();
+    if (password.trim()) src.password = password.trim();
+    const dst: Record<string, string> = {};
+    if (destPath.trim()) dst.path = destPath.trim();
+    promote.mutate(
+      { target_env: target, source_overrides: src, destination_overrides: dst },
+      { onSuccess: (p) => nav(`/pipelines/${p.id}`) },
+    );
+  };
+
+  return (
+    <Modal title="Promote to another environment" onClose={onClose}>
+      <p className="text-sm text-muted">
+        Clones this pipeline's latest config into the target environment. Override the credentials that must differ —
+        sensitive settings left blank are rejected so no dev credential reaches prod.
+      </p>
+      <div className="mt-3 space-y-3">
+        <Field label="Target environment">
+          <Select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="staging">staging</option>
+            <option value="prod">prod</option>
+            <option value="dev">dev</option>
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Source host">
+            <Input value={host} placeholder="prod-db.internal" onChange={(e) => setHost(e.target.value)} />
+          </Field>
+          <Field label="Source password">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Destination path">
+          <Input value={destPath} placeholder="s3://prod-lake/out" onChange={(e) => setDestPath(e.target.value)} />
+        </Field>
+        {promote.isError && <p className="text-xs text-danger">{(promote.error as Error).message}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="sm" disabled={promote.isPending} onClick={submit}>
+            {promote.isPending ? "Promoting…" : "Promote"}
           </Button>
         </div>
       </div>
