@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useChannels, useRules } from "../lib/hooks";
+import { useChannels, useEscalationPolicies, useRules } from "../lib/hooks";
 import { useCreateChannel, useCreateRule, useDeleteChannel, useDeleteRule } from "../lib/mutations";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SectionTitle, Skeleton } from "../components/ui";
 import type { Channel } from "../lib/api";
@@ -100,12 +100,14 @@ function ChannelsSection() {
 function RulesSection() {
   const { data, isLoading } = useRules();
   const { data: channels } = useChannels();
+  const { data: policies } = useEscalationPolicies();
   const create = useCreateRule();
   const del = useDeleteRule();
   const [name, setName] = useState("");
   const [eventIdx, setEventIdx] = useState(0);
   const [severity, setSeverity] = useState("warning");
   const [channelID, setChannelID] = useState<number | "">("");
+  const [policyID, setPolicyID] = useState<number | "">("");
 
   const valid = name.trim() !== "";
   const submit = () =>
@@ -115,6 +117,7 @@ function RulesSection() {
         condition: RULE_EVENTS[eventIdx].condition,
         severity,
         channel_ids: channelID === "" ? [] : [channelID],
+        ...(policyID === "" ? {} : { escalation_policy_id: policyID }),
       },
       { onSuccess: () => setName("") },
     );
@@ -123,7 +126,7 @@ function RulesSection() {
     <section>
       <SectionTitle>Rules</SectionTitle>
       <Card className="p-4">
-        <div className="grid grid-cols-[1fr,1fr,10rem,1fr,auto] items-end gap-3">
+        <div className="grid grid-cols-[1fr,1fr,8rem,1fr,1fr,auto] items-end gap-3">
           <Field label="Rule name">
             <Input value={name} placeholder="Page on finance failures" onChange={(e) => setName(e.target.value)} />
           </Field>
@@ -146,6 +149,14 @@ function RulesSection() {
               <option value="">None (track only)</option>
               {(channels ?? []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Escalation">
+            <Select value={policyID} onChange={(e) => setPolicyID(e.target.value === "" ? "" : Number(e.target.value))}>
+              <option value="">None</option>
+              {(policies ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
           </Field>

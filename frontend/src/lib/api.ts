@@ -143,6 +143,7 @@ export interface CreateRuleRequest {
   severity: string;
   channel_ids: number[];
   pipeline_id?: number;
+  escalation_policy_id?: number;
 }
 
 export interface EscalationStep {
