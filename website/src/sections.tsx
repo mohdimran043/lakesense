@@ -167,6 +167,7 @@ const shippingSources: { name: string; maturity: "Certified" | "Stable" | "Beta"
   { name: "Amazon S3", maturity: "Beta" },
   { name: "GCS", maturity: "Beta" },
   { name: "MinIO", maturity: "Beta" },
+  { name: "Azure Blob", maturity: "Beta" },
   { name: "Elasticsearch", maturity: "Beta" },
   { name: "OpenSearch", maturity: "Beta" },
   { name: "Redis", maturity: "Beta" },
@@ -176,7 +177,7 @@ const shippingSources: { name: string; maturity: "Certified" | "Stable" | "Beta"
 const roadmapSources = [
   "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB", "Percona", "TiDB",
   "Oracle", "DB2", "ScyllaDB",
-  "DynamoDB", "Azure Blob",
+  "DynamoDB",
 ];
 
 export function Sources() {
@@ -184,7 +185,7 @@ export function Sources() {
     <Section id="sources">
       <Eyebrow>Shipping today, honestly badged</Eyebrow>
       <h2 className="font-display text-3xl font-semibold md:text-4xl">
-        Fourteen sources ship now. <span className="text-aqua">25+</span> on the roadmap.
+        Fifteen sources ship now. <span className="text-aqua">25+</span> on the roadmap.
       </h2>
       <p className="mt-3 max-w-2xl text-muted">
         The connector SDK, one event schema, and inherited checksums make the family big — but we badge
