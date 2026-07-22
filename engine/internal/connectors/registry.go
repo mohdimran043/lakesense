@@ -11,6 +11,7 @@ import (
 	"github.com/lakesense/lakesense/engine/internal/connectors/objectstore"
 	"github.com/lakesense/lakesense/engine/internal/connectors/mysql"
 	"github.com/lakesense/lakesense/engine/internal/connectors/postgres"
+	"github.com/lakesense/lakesense/engine/internal/connectors/redis"
 	"github.com/lakesense/lakesense/engine/internal/connectors/sqlite"
 	"github.com/lakesense/lakesense/engine/internal/sdk"
 )
@@ -26,6 +27,7 @@ func Default() *sdk.Registry {
 	r.Register(cassandra.Type, cassandra.New)
 	r.Register(elasticsearch.Type, elasticsearch.New)
 	r.Register(objectstore.Type, objectstore.New)
+	r.Register(redis.Type, redis.New)
 	r.Register(sqlite.Type, sqlite.New)
 	return r
 }
