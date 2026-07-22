@@ -35,6 +35,5 @@ data/
 .idea/
 .vscode/
 
-# Local build spec + progress tracker (not published)
+# Local build spec (not published)
 lakesense-final-prompt.md
-PROGRESS.md
