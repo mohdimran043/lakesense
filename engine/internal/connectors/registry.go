@@ -5,6 +5,7 @@ package connectors
 import (
 	"github.com/lakesense/lakesense/engine/internal/connectors/cassandra"
 	"github.com/lakesense/lakesense/engine/internal/connectors/clickhouse"
+	"github.com/lakesense/lakesense/engine/internal/connectors/elasticsearch"
 	"github.com/lakesense/lakesense/engine/internal/connectors/mongodb"
 	"github.com/lakesense/lakesense/engine/internal/connectors/mssql"
 	"github.com/lakesense/lakesense/engine/internal/connectors/objectstore"
@@ -23,6 +24,7 @@ func Default() *sdk.Registry {
 	r.Register(mssql.Type, mssql.New)
 	r.Register(clickhouse.Type, clickhouse.New)
 	r.Register(cassandra.Type, cassandra.New)
+	r.Register(elasticsearch.Type, elasticsearch.New)
 	r.Register(objectstore.Type, objectstore.New)
 	r.Register(sqlite.Type, sqlite.New)
 	return r
