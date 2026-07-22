@@ -48,7 +48,33 @@ func TestColumnsOf(t *testing.T) {
 	require.Equal(t, []string{"x", "y", "z"}, cs)
 }
 
+func TestConfigValidateProviders(t *testing.T) {
+	// S3 (default provider) requires an endpoint.
+	s3 := &Config{Endpoint: "s3.amazonaws.com", Bucket: "b"}
+	require.NoError(t, s3.validate())
+	require.Equal(t, providerS3, s3.Provider)
+	require.Equal(t, "ndjson", s3.Format)
+	require.Equal(t, "b", s3.Stream) // stream defaults to bucket
+	require.Error(t, (&Config{Bucket: "b"}).validate(), "s3 needs an endpoint")
+
+	// Azure requires a connection string or account+key.
+	az := &Config{Provider: providerAzure, Bucket: "c", ConnectionString: "x"}
+	require.NoError(t, az.validate())
+	require.NoError(t, (&Config{Provider: providerAzure, Bucket: "c", Account: "a", AccountKey: "k"}).validate())
+	require.Error(t, (&Config{Provider: providerAzure, Bucket: "c"}).validate(), "azure needs credentials")
+	require.Error(t, (&Config{Provider: providerAzure, ConnectionString: "x"}).validate(), "needs bucket/container")
+
+	require.Error(t, (&Config{Provider: "gcs-native", Bucket: "b"}).validate(), "unknown provider")
+}
+
 func TestSpecCapabilities(t *testing.T) {
 	require.NoError(t, sdk.ValidateCapabilities(New()))
-	require.Equal(t, "object_storage", New().Spec().Type)
+	spec := New().Spec()
+	require.Equal(t, "object_storage", spec.Type)
+	// Azure is now an advertised preset alongside the S3 family.
+	var names []string
+	for _, p := range spec.Presets {
+		names = append(names, p.Name)
+	}
+	require.Contains(t, names, "azure")
 }

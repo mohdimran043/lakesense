@@ -3,6 +3,7 @@ module github.com/lakesense/lakesense/engine
 go 1.26.1
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.47.0
 	github.com/elastic/go-elasticsearch/v8 v8.13.1
 	github.com/go-mysql-org/go-mysql v1.16.0
@@ -22,6 +23,8 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
 	github.com/ClickHouse/ch-go v0.73.0 // indirect
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

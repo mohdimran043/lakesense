@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v7"
-
 	"github.com/lakesense/lakesense/engine/internal/model"
 	"github.com/lakesense/lakesense/engine/internal/sdk"
 	"github.com/lakesense/lakesense/engine/internal/state"
@@ -21,7 +19,7 @@ import (
 // SplitChunks implements sdk.FullLoader: a single chunk (objects are streamed
 // within ReadChunk).
 func (c *Connector) SplitChunks(_ context.Context, _ model.Stream) ([]state.Chunk, error) {
-	if c.client == nil {
+	if c.backend == nil {
 		return nil, fmt.Errorf("connector not set up")
 	}
 	return []state.Chunk{{}}, nil
@@ -29,7 +27,7 @@ func (c *Connector) SplitChunks(_ context.Context, _ model.Stream) ([]state.Chun
 
 // ReadChunk implements sdk.FullLoader: reads every object under the prefix.
 func (c *Connector) ReadChunk(ctx context.Context, stream model.Stream, _ state.Chunk, emit sdk.RowFunc) error {
-	if c.client == nil {
+	if c.backend == nil {
 		return fmt.Errorf("connector not set up")
 	}
 	_, err := c.readObjects(ctx, time.Time{}, emit)
@@ -39,19 +37,18 @@ func (c *Connector) ReadChunk(ctx context.Context, stream model.Stream, _ state.
 // MaxCursor implements sdk.IncrementalReader: incremental is by object
 // modified-time, so the watermark is the newest object's timestamp.
 func (c *Connector) MaxCursor(ctx context.Context, _ model.Stream, _ string) (string, error) {
-	if c.client == nil {
+	if c.backend == nil {
 		return "", fmt.Errorf("connector not set up")
 	}
 	var newest time.Time
-	listCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	for o := range c.client.ListObjects(listCtx, c.cfg.Bucket, minio.ListObjectsOptions{Prefix: c.cfg.Prefix, Recursive: true}) {
-		if o.Err != nil {
-			return "", fmt.Errorf("list objects: %w", o.Err)
-		}
+	err := c.backend.list(ctx, func(o objectInfo) error {
 		if o.LastModified.After(newest) {
 			newest = o.LastModified
 		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	if newest.IsZero() {
 		return "", nil
@@ -62,7 +59,7 @@ func (c *Connector) MaxCursor(ctx context.Context, _ model.Stream, _ string) (st
 // ReadIncrement implements sdk.IncrementalReader: rows from objects modified
 // after the since watermark; returns the newest object time seen.
 func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, _, since string, emit sdk.RowFunc) (string, error) {
-	if c.client == nil {
+	if c.backend == nil {
 		return "", fmt.Errorf("connector not set up")
 	}
 	var sinceT time.Time
@@ -85,31 +82,27 @@ func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, _, s
 // `after` (zero = all), emitting each record. It returns the newest object time.
 func (c *Connector) readObjects(ctx context.Context, after time.Time, emit sdk.RowFunc) (time.Time, error) {
 	var newest time.Time
-	listCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	for o := range c.client.ListObjects(listCtx, c.cfg.Bucket, minio.ListObjectsOptions{Prefix: c.cfg.Prefix, Recursive: true}) {
-		if o.Err != nil {
-			return newest, fmt.Errorf("list objects: %w", o.Err)
-		}
-		if strings.HasSuffix(o.Key, "/") || o.Size == 0 {
-			continue
+	err := c.backend.list(ctx, func(o objectInfo) error {
+		if o.Size == 0 {
+			return nil
 		}
 		if !after.IsZero() && !o.LastModified.After(after) {
-			continue
+			return nil
 		}
 		if err := c.readObject(ctx, o.Key, emit); err != nil {
-			return newest, err
+			return err
 		}
 		if o.LastModified.After(newest) {
 			newest = o.LastModified
 		}
-	}
-	return newest, nil
+		return nil
+	})
+	return newest, err
 }
 
 // readObject streams one object's records to emit.
 func (c *Connector) readObject(ctx context.Context, key string, emit sdk.RowFunc) error {
-	obj, err := c.client.GetObject(ctx, c.cfg.Bucket, key, minio.GetObjectOptions{})
+	obj, err := c.backend.open(ctx, key)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", key, err)
 	}
