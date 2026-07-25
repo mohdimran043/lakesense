@@ -120,6 +120,8 @@ func (f *fakeRunner) Backfill(_ context.Context, id int64, _ runner.BackfillOpts
 	return runner.RunResult{Events: 1}, nil
 }
 
+func (f *fakeRunner) Catalog(_ context.Context) ([]byte, error) { return []byte("[]"), nil }
+
 func (f *fakeRunner) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

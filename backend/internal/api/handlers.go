@@ -30,6 +30,38 @@ func (s *Server) registerData(r chi.Router) {
 	r.Get("/oncall-schedules", s.listOncallSchedules)
 	r.Get("/pipelines/{id}/backfills", s.listBackfills)
 	r.Get("/quality-monitors", s.listQualityMonitors)
+	r.Get("/connectors", s.listConnectors)
+}
+
+// listConnectors serves the engine's connector registry as wizard-ready
+// catalog entries. The catalog cannot change without a new engine binary, so
+// the first successful result is memoized; failures are not cached.
+func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+
+	if s.connCache != nil {
+		writeJSON(w, http.StatusOK, s.connCache)
+		return
+	}
+	if s.runner == nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "connector catalog unavailable"})
+		return
+	}
+	raw, err := s.runner.Catalog(r.Context())
+	if err != nil {
+		s.logger.Error("connector catalog unavailable", "err", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "connector catalog unavailable"})
+		return
+	}
+	cat, err := normalizeCatalog(raw)
+	if err != nil {
+		s.logger.Error("connector catalog malformed", "err", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "connector catalog malformed"})
+		return
+	}
+	s.connCache = cat
+	writeJSON(w, http.StatusOK, cat)
 }
 
 func (s *Server) listQualityMonitors(w http.ResponseWriter, r *http.Request) {

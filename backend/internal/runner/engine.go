@@ -42,6 +42,18 @@ func (e execEngine) Sync(ctx context.Context, p SyncPaths, pipelineID int64, out
 	return nil
 }
 
+// Catalog runs `lsengine catalog` and returns its stdout (the []Spec JSON).
+func (e execEngine) Catalog(ctx context.Context) ([]byte, error) {
+	var out, errb bytes.Buffer
+	cmd := exec.CommandContext(ctx, e.Path, "catalog")
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("lsengine catalog: %w: %s", err, errb.String())
+	}
+	return out.Bytes(), nil
+}
+
 // Backfill runs `lsengine backfill ...` for a bounded slice, streaming the JSONL
 // event log (which ends with a verify_result) to out.
 func (e execEngine) Backfill(ctx context.Context, p SyncPaths, pipelineID int64, o BackfillOpts, out io.Writer) error {

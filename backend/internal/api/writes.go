@@ -18,6 +18,8 @@ import (
 type pipelineRunner interface {
 	Run(ctx context.Context, id int64) (runner.RunResult, error)
 	Backfill(ctx context.Context, id int64, o runner.BackfillOpts) (runner.RunResult, error)
+	// Catalog returns the engine's connector catalog JSON (static per build).
+	Catalog(ctx context.Context) ([]byte, error)
 }
 
 // registerWrites mounts the pipeline write endpoints. The read API (registerData)

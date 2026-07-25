@@ -1,10 +1,18 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lakesense/lakesense/backend/internal/runner"
 )
 
 // specsFixture mirrors the JSON `lsengine catalog` prints: an array of connector
@@ -126,4 +134,56 @@ func TestNormalizeCatalogBadSchemaSkipsFields(t *testing.T) {
 	assert.Equal(t, "sqlite", cat[1].Type)
 	require.Len(t, cat[1].Fields, 1)
 	assert.Equal(t, "path", cat[1].Fields[0].Key)
+}
+
+// catalogRunner is a pipelineRunner whose Catalog returns canned Spec JSON and
+// counts calls, so the handler test can assert the result shape and that the
+// catalog is memoized (fetched from the engine at most once).
+type catalogRunner struct{ calls int }
+
+func (c *catalogRunner) Run(context.Context, int64) (runner.RunResult, error) {
+	return runner.RunResult{}, nil
+}
+func (c *catalogRunner) Backfill(context.Context, int64, runner.BackfillOpts) (runner.RunResult, error) {
+	return runner.RunResult{}, nil
+}
+func (c *catalogRunner) Catalog(context.Context) ([]byte, error) {
+	c.calls++
+	return []byte(specsFixture), nil
+}
+
+func TestListConnectorsHandler(t *testing.T) {
+	cr := &catalogRunner{}
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), runner: cr}
+	h := chiRouter(s)
+
+	do := func() []ConnectorCatalog {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/connectors", nil))
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		var got []ConnectorCatalog
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+		return got
+	}
+
+	first := do()
+	require.Len(t, first, 2)
+	assert.Equal(t, "postgres", first[0].Type)
+	assert.Equal(t, "PostgreSQL", first[0].Label)
+	assert.Equal(t, "string-list", fieldByKey(t, first[1].Fields, "brokers").Type)
+
+	second := do()
+	assert.Equal(t, first, second)
+	assert.Equal(t, 1, cr.calls, "catalog must be memoized: engine invoked once")
+}
+
+func fieldByKey(t *testing.T, fields []Field, key string) Field {
+	t.Helper()
+	for _, f := range fields {
+		if f.Key == key {
+			return f
+		}
+	}
+	t.Fatalf("field %q not found", key)
+	return Field{}
 }

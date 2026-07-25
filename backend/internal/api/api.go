@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -27,6 +28,11 @@ type Server struct {
 	runner    pipelineRunner
 	audit     audit.Recorder
 	now       func() time.Time
+
+	// connMu guards the memoized connector catalog. The catalog is static per
+	// engine build, so it is fetched from the engine at most once per process.
+	connMu    sync.Mutex
+	connCache []ConnectorCatalog
 }
 
 // New builds the router with logging, recovery, request-id, and timeout

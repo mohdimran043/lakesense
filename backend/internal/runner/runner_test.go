@@ -40,6 +40,8 @@ func (f *fakeEngine) Backfill(_ context.Context, _ SyncPaths, _ int64, o Backfil
 	return f.syncErr
 }
 
+func (f *fakeEngine) Catalog(_ context.Context) ([]byte, error) { return []byte("[]"), nil }
+
 // fakeLoader hands back a fixed pipeline config.
 type fakeLoader struct {
 	cfg PipelineConfig

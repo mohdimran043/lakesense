@@ -20,6 +20,9 @@ type Engine interface {
 	Discover(ctx context.Context, sourceConfigPath string) ([]byte, error)
 	Sync(ctx context.Context, p SyncPaths, pipelineID int64, out io.Writer) error
 	Backfill(ctx context.Context, p SyncPaths, pipelineID int64, o BackfillOpts, out io.Writer) error
+	// Catalog returns `lsengine catalog` stdout: every registered connector's
+	// Spec as a JSON array. Static per engine build.
+	Catalog(ctx context.Context) ([]byte, error)
 }
 
 // SyncPaths are the file paths handed to lsengine sync.
@@ -114,6 +117,12 @@ func (r *Runner) Backfill(ctx context.Context, pipelineID int64, o BackfillOpts)
 		return RunResult{Events: n}, fmt.Errorf("backfill pipeline %d: %w", pipelineID, opErr)
 	}
 	return RunResult{Events: n}, nil
+}
+
+// Catalog returns the engine's connector catalog JSON. It is static per engine
+// build; callers (the API) memoize it.
+func (r *Runner) Catalog(ctx context.Context) ([]byte, error) {
+	return r.engine.Catalog(ctx)
 }
 
 // prepare loads a pipeline's config, materializes its source/dest files, runs
