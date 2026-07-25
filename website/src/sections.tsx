@@ -174,10 +174,11 @@ const shippingSources: { name: string; maturity: "Certified" | "Stable" | "Beta"
   { name: "Kafka", maturity: "Beta" },
   { name: "DynamoDB", maturity: "Beta" },
   { name: "SQLite", maturity: "Beta" },
+  { name: "Oracle", maturity: "Beta" },
 ];
 const roadmapSources = [
   "MariaDB", "Aurora", "CockroachDB", "TimescaleDB", "YugabyteDB", "AlloyDB", "Percona", "TiDB",
-  "Oracle", "DB2", "ScyllaDB",
+  "DB2", "ScyllaDB",
 ];
 
 export function Sources() {
@@ -185,7 +186,7 @@ export function Sources() {
     <Section id="sources">
       <Eyebrow>Shipping today, honestly badged</Eyebrow>
       <h2 className="font-display text-3xl font-semibold md:text-4xl">
-        Sixteen sources ship now. <span className="text-aqua">25+</span> on the roadmap.
+        Seventeen sources ship now. <span className="text-aqua">25+</span> on the roadmap.
       </h2>
       <p className="mt-3 max-w-2xl text-muted">
         The connector SDK, one event schema, and inherited checksums make the family big — but we badge
