@@ -19,6 +19,13 @@ import (
 	"github.com/lakesense/lakesense/engine/internal/sdk"
 )
 
+// extra holds registration hooks contributed by build-tagged connectors (e.g.
+// db2, which needs CGo + IBM's clidriver and so cannot be a plain import here —
+// that would force CGo into the default static build). Each such connector adds
+// a hook from an init() in its own //go:build-tagged registry file; the default
+// build sees an empty slice and has zero footprint from those connectors.
+var extra []func(*sdk.Registry)
+
 // Default returns a registry with every built-in connector.
 func Default() *sdk.Registry {
 	r := sdk.NewRegistry()
@@ -35,5 +42,8 @@ func Default() *sdk.Registry {
 	r.Register(objectstore.Type, objectstore.New)
 	r.Register(redis.Type, redis.New)
 	r.Register(sqlite.Type, sqlite.New)
+	for _, reg := range extra {
+		reg(r)
+	}
 	return r
 }
