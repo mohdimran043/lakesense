@@ -85,8 +85,8 @@ func sampleReq() CreatePipelineRequest {
 	return CreatePipelineRequest{
 		Name:        "Orders to Lake",
 		Environment: "dev",
-		Source:      Endpoint{Type: "postgres", Settings: map[string]string{"host": "db"}},
-		Destination: Endpoint{Type: "parquet", Settings: map[string]string{"path": "./out"}},
+		Source:      Endpoint{Type: "postgres", Settings: map[string]any{"host": "db"}},
+		Destination: Endpoint{Type: "parquet", Settings: map[string]any{"path": "./out"}},
 		Schedule:    "@daily",
 		Streams:     []Stream{{Name: "public.orders", Mode: "full_load"}},
 	}

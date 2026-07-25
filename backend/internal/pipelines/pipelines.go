@@ -15,8 +15,8 @@ import (
 
 // Endpoint is a source or destination in a create/update request.
 type Endpoint struct {
-	Type     string            `json:"type"`
-	Settings map[string]string `json:"settings,omitempty"`
+	Type     string         `json:"type"`
+	Settings map[string]any `json:"settings,omitempty"`
 }
 
 // Stream is one selected stream in a request.

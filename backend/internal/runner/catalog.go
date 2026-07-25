@@ -19,8 +19,8 @@ type StreamSelection struct {
 // always wins over a settings collision.
 func flattenEndpoint(raw []byte) (map[string]any, error) {
 	var ep struct {
-		Type     string            `json:"type"`
-		Settings map[string]string `json:"settings"`
+		Type     string         `json:"type"`
+		Settings map[string]any `json:"settings"`
 	}
 	if err := json.Unmarshal(raw, &ep); err != nil {
 		return nil, fmt.Errorf("parse endpoint config: %w", err)

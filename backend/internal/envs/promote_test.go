@@ -11,8 +11,8 @@ import (
 func devConfig() configver.Config {
 	return configver.Config{
 		Name:        "orders",
-		Source:      configver.Endpoint{Type: "postgres", Settings: map[string]string{"host": "dev-db", "database": "shop", "password": "devpw", "sslmode": "disable"}},
-		Destination: configver.Endpoint{Type: "iceberg", Settings: map[string]string{"path": "s3://dev-lake/orders"}},
+		Source:      configver.Endpoint{Type: "postgres", Settings: map[string]any{"host": "dev-db", "database": "shop", "password": "devpw", "sslmode": "disable"}},
+		Destination: configver.Endpoint{Type: "iceberg", Settings: map[string]any{"path": "s3://dev-lake/orders"}},
 		Schedule:    "@daily",
 		Streams:     []configver.Stream{{Name: "public.orders", Mode: "cdc"}},
 	}

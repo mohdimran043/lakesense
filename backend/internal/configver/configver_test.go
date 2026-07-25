@@ -13,7 +13,7 @@ var t0 = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 func baseConfig() Config {
 	return Config{
 		Name:        "orders",
-		Source:      Endpoint{Type: "postgres", Settings: map[string]string{"host": "db", "database": "shop"}},
+		Source:      Endpoint{Type: "postgres", Settings: map[string]any{"host": "db", "database": "shop"}},
 		Destination: Endpoint{Type: "iceberg"},
 		Schedule:    "@daily",
 		Streams:     []Stream{{Name: "public.orders", Mode: "cdc"}},
@@ -25,7 +25,7 @@ func TestCanonicalYAMLIsDeterministic(t *testing.T) {
 	// serialize byte-identically (yaml.v3 sorts map keys).
 	a := baseConfig()
 	b := baseConfig()
-	b.Source.Settings = map[string]string{"database": "shop", "host": "db"} // reordered
+	b.Source.Settings = map[string]any{"database": "shop", "host": "db"} // reordered
 
 	ya, err := CanonicalYAML(a)
 	require.NoError(t, err)
@@ -113,6 +113,37 @@ func TestRollbackAppendsRestoringVersion(t *testing.T) {
 
 	_, err = Rollback([]Version{v1, v2}, 9, "carol", t0)
 	assert.Error(t, err, "rolling back to a missing version fails")
+}
+
+// TestCanonicalYAMLMixedTypesIdempotent guards the map[string]any widening:
+// settings holding an integer, a boolean, and a string list must serialize
+// deterministically and survive a Parse→CanonicalYAML round-trip byte-for-byte,
+// which is what version dedup and rollback depend on.
+func TestCanonicalYAMLMixedTypesIdempotent(t *testing.T) {
+	c := Config{
+		Name: "kafka-pipe",
+		Source: Endpoint{Type: "kafka", Settings: map[string]any{
+			"brokers":     []any{"b1:9092", "b2:9092"},
+			"topic":       "orders",
+			"max_bytes":   1048576,
+			"tls":         true,
+			"description": "true", // a genuine string that looks like a bool
+		}},
+		Destination: Endpoint{Type: "parquet", Settings: map[string]any{"path": "./out"}},
+		Schedule:    "@daily",
+		Streams:     []Stream{{Name: "orders", Mode: "full_load"}},
+	}
+	y1, err := CanonicalYAML(c)
+	require.NoError(t, err)
+
+	parsed, err := Parse(y1)
+	require.NoError(t, err)
+	y2, err := CanonicalYAML(parsed)
+	require.NoError(t, err)
+
+	assert.Equal(t, y1, y2, "canonical YAML must be idempotent across Parse")
+	assert.Contains(t, y1, "brokers:")
+	assert.Contains(t, y1, "b1:9092")
 }
 
 // strings joins a slice for substring assertions.

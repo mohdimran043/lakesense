@@ -25,10 +25,13 @@ type Config struct {
 }
 
 // Endpoint is a source or destination, with connector-specific settings kept in
-// a sorted map so serialization stays deterministic.
+// a sorted map so serialization stays deterministic. Values are any because
+// connector configs include integers, booleans, and string arrays, not only
+// strings (e.g. Kafka brokers). yaml.v3 sorts keys and renders scalars and
+// sequences deterministically, so equal configs still yield identical YAML.
 type Endpoint struct {
-	Type     string            `yaml:"type"`
-	Settings map[string]string `yaml:"settings,omitempty"`
+	Type     string         `yaml:"type"`
+	Settings map[string]any `yaml:"settings,omitempty"`
 }
 
 // Stream is one selected stream and its sync mode.

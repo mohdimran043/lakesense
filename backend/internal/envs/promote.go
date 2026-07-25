@@ -38,7 +38,7 @@ func Promote(cfg configver.Config, o Overrides) configver.Config {
 // applyOverrides merges overrides onto an endpoint's settings (override wins),
 // leaving unspecified settings intact.
 func applyOverrides(e configver.Endpoint, over map[string]string) configver.Endpoint {
-	merged := map[string]string{}
+	merged := map[string]any{}
 	for k, v := range e.Settings {
 		merged[k] = v
 	}
@@ -68,7 +68,7 @@ var sensitiveKeys = map[string]bool{
 	"bucket": true, "token": true, "url": true, "path": true,
 }
 
-func missingIn(settings, over map[string]string, side string) []string {
+func missingIn(settings map[string]any, over map[string]string, side string) []string {
 	var out []string
 	for k := range settings {
 		if sensitiveKeys[k] {
