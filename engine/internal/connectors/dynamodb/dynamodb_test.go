@@ -54,11 +54,13 @@ func TestAttrValueScalarsAndNesting(t *testing.T) {
 		"n": &types.AttributeValueMemberN{Value: "5"},
 		"s": &types.AttributeValueMemberS{Value: "a"},
 	}}
-	require.JSONEq(t, `{"n":5,"s":"a"}`, attrValue(m).(string))
+	mv, _ := attrValue(m).(string)
+	require.JSONEq(t, `{"n":5,"s":"a"}`, mv)
 
 	// A string set serializes as a JSON array.
 	ss := &types.AttributeValueMemberSS{Value: []string{"x", "y"}}
-	require.JSONEq(t, `["x","y"]`, attrValue(ss).(string))
+	sv, _ := attrValue(ss).(string)
+	require.JSONEq(t, `["x","y"]`, sv)
 }
 
 func TestItemToRow(t *testing.T) {

@@ -192,9 +192,7 @@ func (c *Connector) tableSchema(ctx context.Context, table string) (model.Schema
 	if err != nil {
 		return model.Schema{}, err
 	}
-	for _, col := range inferred {
-		schema.Columns = append(schema.Columns, col)
-	}
+	schema.Columns = append(schema.Columns, inferred...)
 	return schema, nil
 }
 

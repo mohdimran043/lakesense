@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -151,7 +152,7 @@ func marshal(v any) (string, error) {
 }
 
 func wrap(key string, err error) error {
-	if err == goredis.Nil { // key raced away between TYPE and read
+	if errors.Is(err, goredis.Nil) { // key raced away between TYPE and read
 		return nil
 	}
 	return fmt.Errorf("read %q: %w", key, err)

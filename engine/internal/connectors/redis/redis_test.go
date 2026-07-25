@@ -44,7 +44,7 @@ func TestMarshal(t *testing.T) {
 func TestDiscoverFixedSchema(t *testing.T) {
 	c := &Connector{cfg: Config{Address: "x", DB: 3, Pattern: "*"}}
 	// Discover reads no server state; a non-nil client is the only precondition.
-	c.Setup(context.Background(), []byte(`{"address":"localhost:6379","db":3}`))
+	_ = c.Setup(context.Background(), []byte(`{"address":"localhost:6379","db":3}`))
 	streams, err := c.Discover(context.Background())
 	require.NoError(t, err)
 	require.Len(t, streams, 1)
