@@ -1,0 +1,129 @@
+package api
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// specsFixture mirrors the JSON `lsengine catalog` prints: an array of connector
+// Specs whose config_schema is a small JSON-Schema subset. It exercises every
+// normalization rule (order, password, enum, array, integer, boolean, required,
+// title/description/default) plus presets.
+const specsFixture = `[
+  {
+    "type": "postgres",
+    "display_name": "PostgreSQL",
+    "capabilities": ["full_load", "incremental", "cdc"],
+    "maturity": "certified",
+    "config_schema": {
+      "title": "PostgreSQL source",
+      "required": ["host", "password"],
+      "properties": {
+        "host": {"type": "string", "title": "Host"},
+        "port": {"type": "integer", "title": "Port", "default": 5432},
+        "password": {"type": "string", "title": "Password", "format": "password"},
+        "sslmode": {"type": "string", "title": "SSL mode", "default": "prefer",
+          "enum": ["disable", "require"]},
+        "cdc_auto_create": {"type": "boolean", "title": "Auto-create slot",
+          "default": true, "description": "Create the replication slot"}
+      }
+    },
+    "presets": [
+      {"name": "cockroachdb", "display_name": "CockroachDB", "maturity": "stable",
+       "notes": "no logical replication"}
+    ]
+  },
+  {
+    "type": "kafka",
+    "display_name": "Kafka",
+    "capabilities": ["full_load", "incremental"],
+    "maturity": "beta",
+    "config_schema": {
+      "required": ["brokers", "topic"],
+      "properties": {
+        "brokers": {"type": "array", "items": {"type": "string"},
+          "title": "Bootstrap brokers", "description": "host:port"},
+        "topic": {"type": "string", "title": "Topic"}
+      }
+    }
+  }
+]`
+
+func TestNormalizeCatalog(t *testing.T) {
+	cat, err := normalizeCatalog([]byte(specsFixture))
+	require.NoError(t, err)
+	require.Len(t, cat, 2)
+
+	pg := cat[0]
+	assert.Equal(t, "postgres", pg.Type)
+	assert.Equal(t, "PostgreSQL", pg.Label)
+	assert.Equal(t, "certified", pg.Maturity)
+	assert.Equal(t, []string{"full_load", "incremental", "cdc"}, pg.Capabilities)
+	require.Len(t, pg.Presets, 1)
+	assert.Equal(t, "cockroachdb", pg.Presets[0].Name)
+	assert.Equal(t, "CockroachDB", pg.Presets[0].Label)
+
+	// Field order follows the schema's properties declaration order.
+	var keys []string
+	for _, f := range pg.Fields {
+		keys = append(keys, f.Key)
+	}
+	assert.Equal(t, []string{"host", "port", "password", "sslmode", "cdc_auto_create"}, keys)
+
+	byKey := map[string]Field{}
+	for _, f := range pg.Fields {
+		byKey[f.Key] = f
+	}
+	assert.Equal(t, "string", byKey["host"].Type)
+	assert.Equal(t, "Host", byKey["host"].Label)
+	assert.True(t, byKey["host"].Required)
+
+	assert.Equal(t, "integer", byKey["port"].Type)
+	assert.Equal(t, "5432", byKey["port"].Default)
+	assert.False(t, byKey["port"].Required)
+
+	assert.Equal(t, "string", byKey["password"].Type)
+	assert.True(t, byKey["password"].Secret)
+	assert.True(t, byKey["password"].Required)
+
+	assert.Equal(t, "enum", byKey["sslmode"].Type)
+	assert.Equal(t, []string{"disable", "require"}, byKey["sslmode"].Enum)
+	assert.Equal(t, "prefer", byKey["sslmode"].Default)
+
+	assert.Equal(t, "boolean", byKey["cdc_auto_create"].Type)
+	assert.Equal(t, "true", byKey["cdc_auto_create"].Default)
+	assert.Equal(t, "Create the replication slot", byKey["cdc_auto_create"].Hint)
+
+	kafka := cat[1]
+	assert.Equal(t, "beta", kafka.Maturity)
+	kf := map[string]Field{}
+	for _, f := range kafka.Fields {
+		kf[f.Key] = f
+	}
+	assert.Equal(t, "string-list", kf["brokers"].Type)
+	assert.Equal(t, "host:port", kf["brokers"].Hint)
+	assert.True(t, kf["brokers"].Required)
+}
+
+// TestNormalizeCatalogBadSchemaSkipsFields proves one connector's malformed
+// schema does not blank the whole catalog: the connector still lists, with no
+// fields, and the others are unaffected.
+func TestNormalizeCatalogBadSchemaSkipsFields(t *testing.T) {
+	const bad = `[
+	  {"type": "broken", "display_name": "Broken", "maturity": "beta",
+	   "config_schema": {"properties": "not-an-object"}},
+	  {"type": "sqlite", "display_name": "SQLite", "maturity": "beta",
+	   "config_schema": {"required": ["path"],
+	     "properties": {"path": {"type": "string", "title": "Path"}}}}
+	]`
+	cat, err := normalizeCatalog([]byte(bad))
+	require.NoError(t, err)
+	require.Len(t, cat, 2)
+	assert.Equal(t, "broken", cat[0].Type)
+	assert.Empty(t, cat[0].Fields)
+	assert.Equal(t, "sqlite", cat[1].Type)
+	require.Len(t, cat[1].Fields, 1)
+	assert.Equal(t, "path", cat[1].Fields[0].Key)
+}
