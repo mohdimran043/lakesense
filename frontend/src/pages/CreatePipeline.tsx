@@ -27,6 +27,11 @@ const DESTINATIONS: ConnectorCatalog[] = [
 const MODES = ["full_load", "incremental", "cdc"];
 const STEPS = ["Source", "Destination", "Streams", "Review"];
 
+// Stable fallback so `sources` doesn't get a fresh array identity every
+// render — otherwise the useEffect below that depends on [sources] would
+// fire (and no-op) on every render.
+const EMPTY_SOURCES: ConnectorCatalog[] = [];
+
 // A settings value mirrors a ConnectorField's type while editing: text/enum/
 // integer inputs hold strings, checkboxes hold booleans, string-lists hold arrays.
 type SettingVal = string | boolean | string[];
@@ -117,7 +122,10 @@ function buildSettings(fields: ConnectorField[], raw: Record<string, SettingVal>
     } else if (f.type === "boolean") {
       if (typeof v === "boolean") out[f.key] = v;
     } else if (f.type === "integer") {
-      if (typeof v === "string" && v.trim()) out[f.key] = Number(v);
+      if (typeof v === "string" && v.trim()) {
+        const n = Number(v);
+        if (!Number.isNaN(n)) out[f.key] = n;
+      }
     } else if (typeof v === "string" && v.trim()) {
       out[f.key] = v.trim();
     }
@@ -155,7 +163,7 @@ export function CreatePipeline() {
   const [step, setStep] = useState(0);
   const [s, setS] = useState<State>(initialState);
 
-  const sources = connectors.data ?? [];
+  const sources = connectors.data ?? EMPTY_SOURCES;
   const source = sources.find((c) => c.type === s.source.type);
 
   // Once the catalog loads, default the source to postgres (or the first entry)
@@ -448,7 +456,7 @@ function FieldControl({
   if (f.type === "enum") {
     return (
       <Field label={label} error={err} hint={f.hint}>
-        <Select value={typeof value === "string" ? value : f.default ?? ""} onChange={(e) => onChange(e.target.value)}>
+        <Select value={typeof value === "string" ? value : f.default ?? f.enum?.[0] ?? ""} onChange={(e) => onChange(e.target.value)}>
           {(f.enum ?? []).map((opt) => (
             <option key={opt} value={opt}>
               {opt === "" ? "—" : opt}
