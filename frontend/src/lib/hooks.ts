@@ -33,3 +33,5 @@ export const useOncallSchedules = () =>
   useQuery({ queryKey: ["oncall-schedules"], queryFn: api.oncallSchedules, ...opts });
 export const useBackfills = (id: number) =>
   useQuery({ queryKey: ["backfills", id], queryFn: () => api.backfills(id), ...opts });
+export const useConnectors = () =>
+  useQuery({ queryKey: ["connectors"], queryFn: api.connectors, ...opts });

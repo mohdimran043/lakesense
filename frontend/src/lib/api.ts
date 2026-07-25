@@ -181,7 +181,30 @@ export interface BackfillJob {
 
 export interface EndpointInput {
   type: string;
-  settings: Record<string, string>;
+  // Values are typed to match the connector's config schema: strings, numbers,
+  // booleans, or string arrays (e.g. Kafka brokers). The backend stores them as
+  // map[string]any and passes them straight to the engine config.
+  settings: Record<string, unknown>;
+}
+
+export interface ConnectorField {
+  key: string;
+  label: string;
+  type: "string" | "integer" | "boolean" | "enum" | "string-list";
+  secret?: boolean;
+  required?: boolean;
+  default?: string;
+  enum?: string[];
+  hint?: string;
+}
+
+export interface ConnectorCatalog {
+  type: string;
+  label: string;
+  maturity: string;
+  capabilities: string[];
+  presets?: { name: string; label: string; maturity?: string; notes?: string }[];
+  fields: ConnectorField[];
 }
 
 export interface StreamInput {
@@ -259,4 +282,5 @@ export const api = {
   analytics: (cost?: { costPerGB: number; costPerHour: number }) =>
     get<Analytics>(cost ? `/analytics?cost_per_gb=${cost.costPerGB}&cost_per_hour=${cost.costPerHour}` : "/analytics"),
   audit: () => get<AuditEntry[]>("/audit"),
+  connectors: () => get<ConnectorCatalog[]>("/connectors"),
 };
