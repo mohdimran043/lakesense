@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/lakesense/lakesense/engine/internal/model"
 	"github.com/lakesense/lakesense/engine/internal/sdk"
@@ -39,7 +40,7 @@ func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, curs
 		query = fmt.Sprintf("SELECT * FROM %s ORDER BY %s", qualified(stream), col)
 	} else {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s > :1 ORDER BY %s", qualified(stream), col, col)
-		args = []any{since}
+		args = []any{cursorBind(stream, cursorField, since)}
 	}
 	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -58,4 +59,23 @@ func (c *Connector) ReadIncrement(ctx context.Context, stream model.Stream, curs
 		return "", err
 	}
 	return newCursor, nil
+}
+
+// cursorBind converts the engine's opaque cursor string into the value bound
+// into WHERE <col> > :1. For a DATE/TIMESTAMP cursor column, the stored value
+// is the RFC3339Nano string normalizeValue/MaxCursor emit; binding it as a raw
+// string forces Oracle into an implicit string→date conversion against the
+// session NLS format (e.g. DD-MON-RR), which rejects RFC3339 and raises
+// ORA-01858/ORA-01861. Parsing it back to time.Time lets go-ora bind a native
+// Oracle date, matching the column type. Numeric/string cursors bind as-is, and
+// an unparseable timestamp falls back to the string (best effort, no panic).
+func cursorBind(stream model.Stream, cursorField, since string) any {
+	col, ok := stream.Schema.Column(cursorField)
+	if !ok || (col.Type != model.TypeTimestamp && col.Type != model.TypeDate) {
+		return since
+	}
+	if t, err := time.Parse(time.RFC3339Nano, since); err == nil {
+		return t.UTC()
+	}
+	return since
 }

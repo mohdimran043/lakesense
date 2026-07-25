@@ -3,6 +3,7 @@ package oracle
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -122,8 +123,39 @@ func TestSuggestCursor(t *testing.T) {
 	}}
 	require.Equal(t, "UPDATED_AT", suggestCursor(ts))
 
+	// With BOTH an integer PK and a timestamp column, the timestamp column is
+	// preferred as the default cursor — this is the path ReadIncrement must bind
+	// as a native date, not a raw RFC3339 string (else ORA-01858/ORA-01861).
+	tsOverPK := model.Schema{Columns: []model.Column{
+		{Name: "ID", Type: model.TypeInt64, PrimaryKey: true},
+		{Name: "PAYLOAD", Type: model.TypeString},
+		{Name: "CREATED_AT", Type: model.TypeTimestamp},
+	}}
+	require.Equal(t, "CREATED_AT", suggestCursor(tsOverPK))
+
 	pkOnly := model.Schema{Columns: []model.Column{{Name: "ID", Type: model.TypeInt64, PrimaryKey: true}}}
 	require.Equal(t, "ID", suggestCursor(pkOnly))
+}
+
+func TestCursorBind(t *testing.T) {
+	stream := model.Stream{Schema: model.Schema{Columns: []model.Column{
+		{Name: "ID", Type: model.TypeInt64, PrimaryKey: true},
+		{Name: "CREATED_AT", Type: model.TypeTimestamp},
+		{Name: "LABEL", Type: model.TypeString},
+	}}}
+
+	// Timestamp cursor: RFC3339Nano string parses back to a UTC time.Time so
+	// go-ora binds a native Oracle date instead of forcing an NLS string cast.
+	got := cursorBind(stream, "CREATED_AT", "2026-07-25T10:30:00.5Z")
+	tv, ok := got.(time.Time)
+	require.True(t, ok, "timestamp cursor must bind as time.Time, got %T", got)
+	require.True(t, tv.Equal(time.Date(2026, 7, 25, 10, 30, 0, 500_000_000, time.UTC)))
+
+	// Numeric cursor stays a string (parsed as int64 in the WHERE by Oracle).
+	require.Equal(t, "42", cursorBind(stream, "ID", "42"))
+
+	// Unparseable timestamp value falls back to the raw string, no panic.
+	require.Equal(t, "not-a-date", cursorBind(stream, "CREATED_AT", "not-a-date"))
 }
 
 func TestSpecCapabilities(t *testing.T) {
