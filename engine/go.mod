@@ -20,6 +20,7 @@ require (
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/segmentio/kafka-go v0.4.51
+	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver v1.17.9
 	modernc.org/sqlite v1.54.0

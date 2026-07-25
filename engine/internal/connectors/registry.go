@@ -12,6 +12,7 @@ import (
 	"github.com/lakesense/lakesense/engine/internal/connectors/mssql"
 	"github.com/lakesense/lakesense/engine/internal/connectors/objectstore"
 	"github.com/lakesense/lakesense/engine/internal/connectors/mysql"
+	"github.com/lakesense/lakesense/engine/internal/connectors/oracle"
 	"github.com/lakesense/lakesense/engine/internal/connectors/postgres"
 	"github.com/lakesense/lakesense/engine/internal/connectors/redis"
 	"github.com/lakesense/lakesense/engine/internal/connectors/sqlite"
@@ -25,6 +26,7 @@ func Default() *sdk.Registry {
 	r.Register(mysql.Type, mysql.New)
 	r.Register(mongodb.Type, mongodb.New)
 	r.Register(mssql.Type, mssql.New)
+	r.Register(oracle.Type, oracle.New)
 	r.Register(clickhouse.Type, clickhouse.New)
 	r.Register(cassandra.Type, cassandra.New)
 	r.Register(dynamodb.Type, dynamodb.New)
