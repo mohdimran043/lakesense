@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -66,6 +67,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch cmd {
 	case "spec":
 		err = runSpec(ctx, rest, stdout)
+	case "catalog":
+		err = runCatalog(ctx, rest, stdout)
 	case "check":
 		err = runCheck(ctx, rest, stdout)
 	case "discover":
@@ -100,6 +103,7 @@ Usage:
 
 Commands:
   spec      print the JSON schema of a connector's config
+  catalog   print every connector's config schema as a JSON array
   check     validate connectivity and configuration
   discover  list streams and their schemas as a catalog
   sync      run replication for the selected streams
@@ -131,6 +135,25 @@ func runSpec(_ context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	return writeJSON(stdout, c.Spec())
+}
+
+// runCatalog emits every registered connector's Spec as a JSON array — the
+// surface a UI builds its whole source picker from. Like spec, it needs no
+// connection. Order is deterministic (sorted by type) so consumers and tests
+// see a stable list.
+func runCatalog(_ context.Context, _ []string, stdout io.Writer) error {
+	reg := connectors.Default()
+	names := reg.Names()
+	sort.Strings(names)
+	specs := make([]sdk.Spec, 0, len(names))
+	for _, name := range names {
+		c, err := reg.New(name)
+		if err != nil {
+			return err
+		}
+		specs = append(specs, c.Spec())
+	}
+	return writeJSON(stdout, specs)
 }
 
 // runCheck validates connectivity and source-side prerequisites, printing a

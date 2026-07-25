@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -37,6 +38,7 @@ func TestRunDispatch(t *testing.T) {
 		{name: "sync needs connector type", args: []string{"sync", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
 		{name: "discover needs connector type", args: []string{"discover", "--config", cfgPath}, wantCode: 1, wantErr: "connector type required"},
 		{name: "backfill needs stream", args: []string{"backfill", "--config", cfgPath}, wantCode: 1, wantErr: "backfill requires"},
+		{name: "catalog lists connectors", args: []string{"catalog"}, wantCode: 0, wantOut: `"type"`},
 	}
 
 	for _, tt := range tests {
@@ -66,6 +68,34 @@ func TestSpecEmitsConnectorSchema(t *testing.T) {
 	assert.Equal(t, "postgres", spec.Type)
 	assert.Contains(t, spec.Capabilities, sdk.CapFullLoad)
 	assert.NotEmpty(t, spec.ConfigSchema)
+}
+
+// TestCatalogEmitsAllConnectors proves `catalog` prints every registered
+// connector's Spec as a JSON array (not events), sorted by type, each with a
+// non-empty display name — the surface a UI builds its whole source picker from.
+func TestCatalogEmitsAllConnectors(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"catalog"}, &stdout, &stderr)
+	require.Equal(t, 0, code, "stderr: %s", stderr.String())
+
+	var specs []sdk.Spec
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &specs))
+
+	byType := map[string]sdk.Spec{}
+	var types []string
+	for _, sp := range specs {
+		byType[sp.Type] = sp
+		types = append(types, sp.Type)
+		assert.NotEmpty(t, sp.DisplayName, "connector %q missing display name", sp.Type)
+	}
+	for _, want := range []string{
+		"postgres", "mysql", "mongodb", "sqlserver", "clickhouse", "cassandra",
+		"dynamodb", "elasticsearch", "kafka", "object_storage", "redis", "sqlite",
+	} {
+		_, ok := byType[want]
+		assert.True(t, ok, "catalog missing connector %q", want)
+	}
+	assert.True(t, sort.StringsAreSorted(types), "catalog must be sorted by type: %v", types)
 }
 
 // TestSyncEmitsEngineInfoEvent proves sync emits engine_info as its first line
