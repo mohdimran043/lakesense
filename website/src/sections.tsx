@@ -224,7 +224,24 @@ export function Showcase() {
       <h2 className="font-display text-3xl font-semibold md:text-4xl">
         Every sync ships with proof it's correct.
       </h2>
-      <div className="mt-12 grid items-center gap-8 md:grid-cols-2">
+
+      {/* Live product loop — a real session, not stock footage. */}
+      <figure className="mt-10">
+        <div className="glass overflow-hidden rounded-2xl p-1.5 shadow-2xl shadow-aqua/20">
+          <img
+            src={`${import.meta.env.BASE_URL}shots/lakesense-demo.gif`}
+            alt="LakeSense in action — fleet health and verified badges, transparent cost analytics, the data-diff correctness board, and the registry-driven source wizard adapting per connector"
+            loading="lazy"
+            className="w-full rounded-xl border border-white/5"
+          />
+        </div>
+        <figcaption className="mt-3 text-center text-sm text-muted">
+          A real session: fleet health, transparent cost, the correctness board, and the
+          registry-driven source wizard — every connector rendered from the engine itself.
+        </figcaption>
+      </figure>
+
+      <div className="mt-14 grid items-center gap-8 md:grid-cols-2">
         <Frame src={`${import.meta.env.BASE_URL}shots/dashboard.jpg`} alt="LakeSense dashboard — fleet health and verified badges" tilt="-4deg" />
         <div>
           <h3 className="font-display text-xl font-medium">A fleet that senses itself</h3>
