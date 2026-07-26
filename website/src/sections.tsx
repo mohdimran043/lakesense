@@ -228,12 +228,18 @@ export function Showcase() {
       {/* Live product loop — a real session, not stock footage. */}
       <figure className="mt-10">
         <div className="glass overflow-hidden rounded-2xl p-1.5 shadow-2xl shadow-aqua/20">
-          <img
-            src={`${import.meta.env.BASE_URL}shots/lakesense-demo.gif`}
-            alt="LakeSense in action — fleet health and verified badges, transparent cost analytics, the data-diff correctness board, and the registry-driven source wizard adapting per connector"
-            loading="lazy"
+          <video
             className="w-full rounded-xl border border-white/5"
-          />
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            poster={`${import.meta.env.BASE_URL}shots/lakesense-demo-poster.jpg`}
+            aria-label="LakeSense in action — fleet health and verified badges, transparent cost analytics, the data-diff correctness board, and the registry-driven source wizard adapting per connector"
+          >
+            <source src={`${import.meta.env.BASE_URL}shots/lakesense-demo.mp4`} type="video/mp4" />
+          </video>
         </div>
         <figcaption className="mt-3 text-center text-sm text-muted">
           A real session: fleet health, transparent cost, the correctness board, and the
