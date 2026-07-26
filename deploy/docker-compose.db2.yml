@@ -1,0 +1,15 @@
+# Opt-in overlay: swap the backend for the Db2-enabled image (CGo + IBM
+# clidriver), so pipelines can use the IBM Db2 source from the running stack.
+#
+# The default stack (docker-compose.yml alone) stays static/CGo-free and
+# EXCLUDES Db2 — this overlay is the only way Db2 appears in the wizard.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.db2.yml up -d --build
+#
+# The engine catalog then includes "db2", GET /connectors surfaces it, and the
+# create-pipeline wizard lists IBM Db2 (Beta). Point a Db2 source at a reachable
+# Db2 instance (host/port 50000/database/user/password).
+services:
+  backend:
+    build:
+      dockerfile: backend/Dockerfile.db2
