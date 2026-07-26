@@ -19,6 +19,15 @@ type Field struct {
 	Default  string   `json:"default,omitempty"`
 	Enum     []string `json:"enum,omitempty"`
 	Hint     string   `json:"hint,omitempty"`
+	ShowIf   *ShowIf  `json:"show_if,omitempty"`
+}
+
+// ShowIf makes a field conditional: the wizard shows it only when another
+// field's current value equals Eq (e.g. Object Storage's s3/azure fields keyed
+// on "provider"). Hidden fields are neither validated as required nor submitted.
+type ShowIf struct {
+	Field string `json:"field"`
+	Eq    string `json:"eq"`
 }
 
 // Preset is a named wire-compatible variant of a connector (e.g. CockroachDB).
@@ -74,6 +83,7 @@ type propSchema struct {
 	Items       struct {
 		Type string `json:"type"`
 	} `json:"items"`
+	ShowIf *ShowIf `json:"x-show-if"`
 }
 
 // normalizeCatalog turns the engine's []Spec JSON into wizard-ready connectors.
@@ -150,6 +160,7 @@ func normalizeFields(schema json.RawMessage) ([]Field, error) {
 		if f.Type == "enum" {
 			f.Enum = p.Enum
 		}
+		f.ShowIf = p.ShowIf
 		fields = append(fields, f)
 	}
 	return fields, nil

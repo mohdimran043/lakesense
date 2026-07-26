@@ -177,6 +177,35 @@ func TestListConnectorsHandler(t *testing.T) {
 	assert.Equal(t, 1, cr.calls, "catalog must be memoized: engine invoked once")
 }
 
+// TestNormalizeCatalogShowIf proves the x-show-if schema extension normalizes
+// into Field.ShowIf so the wizard can render provider-conditional fields (e.g.
+// Object Storage's s3/azure split).
+func TestNormalizeCatalogShowIf(t *testing.T) {
+	const spec = `[{"type":"objectstore","display_name":"Object Storage","maturity":"beta",
+	  "config_schema":{"required":["bucket","endpoint"],"properties":{
+	    "provider":{"type":"string","title":"Provider","default":"s3","enum":["s3","azure"]},
+	    "bucket":{"type":"string","title":"Bucket"},
+	    "endpoint":{"type":"string","title":"Endpoint (s3)","x-show-if":{"field":"provider","eq":"s3"}},
+	    "account":{"type":"string","title":"Account (azure)","x-show-if":{"field":"provider","eq":"azure"}}
+	  }}}]`
+	cat, err := normalizeCatalog([]byte(spec))
+	require.NoError(t, err)
+	require.Len(t, cat, 1)
+
+	bucket := fieldByKey(t, cat[0].Fields, "bucket")
+	assert.Nil(t, bucket.ShowIf, "unconditional field has no show_if")
+
+	endpoint := fieldByKey(t, cat[0].Fields, "endpoint")
+	require.NotNil(t, endpoint.ShowIf)
+	assert.Equal(t, "provider", endpoint.ShowIf.Field)
+	assert.Equal(t, "s3", endpoint.ShowIf.Eq)
+	assert.True(t, endpoint.Required, "endpoint is required (enforced only when its show_if matches)")
+
+	account := fieldByKey(t, cat[0].Fields, "account")
+	require.NotNil(t, account.ShowIf)
+	assert.Equal(t, "azure", account.ShowIf.Eq)
+}
+
 func fieldByKey(t *testing.T, fields []Field, key string) Field {
 	t.Helper()
 	for _, f := range fields {

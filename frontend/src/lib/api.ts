@@ -196,6 +196,7 @@ export interface ConnectorField {
   default?: string;
   enum?: string[];
   hint?: string;
+  show_if?: { field: string; eq: string };
 }
 
 export interface ConnectorCatalog {

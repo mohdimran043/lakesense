@@ -83,19 +83,28 @@ function isEmptyVal(v: SettingVal | undefined): boolean {
   return !v.trim();
 }
 
+// fieldVisible honors a field's show_if: a conditional field (e.g. Object
+// Storage's s3/azure fields keyed on "provider") is shown only when the
+// referenced field's current value matches. Hidden fields are neither
+// validated as required nor submitted.
+function fieldVisible(f: ConnectorField, settings: Record<string, SettingVal>): boolean {
+  if (!f.show_if) return true;
+  return settings[f.show_if.field] === f.show_if.eq;
+}
+
 function validateStep(step: number, s: State, source: ConnectorCatalog | undefined): Record<string, string> {
   const e: Record<string, string> = {};
   if (step === 0) {
     if (!s.name.trim()) e.name = "A name is required.";
     if (!source) e.source = "Choose a source.";
     source?.fields.forEach((f) => {
-      if (f.required && isEmptyVal(s.source.settings[f.key])) e["src_" + f.key] = `${f.label} is required.`;
+      if (fieldVisible(f, s.source.settings) && f.required && isEmptyVal(s.source.settings[f.key])) e["src_" + f.key] = `${f.label} is required.`;
     });
   }
   if (step === 1) {
     const dst = DESTINATIONS.find((d) => d.type === s.destination.type);
     dst?.fields.forEach((f) => {
-      if (f.required && isEmptyVal(s.destination.settings[f.key])) e["dst_" + f.key] = `${f.label} is required.`;
+      if (fieldVisible(f, s.destination.settings) && f.required && isEmptyVal(s.destination.settings[f.key])) e["dst_" + f.key] = `${f.label} is required.`;
     });
   }
   if (step === 2) {
@@ -114,6 +123,7 @@ function validateStep(step: number, s: State, source: ConnectorCatalog | undefin
 function buildSettings(fields: ConnectorField[], raw: Record<string, SettingVal>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of fields) {
+    if (!fieldVisible(f, raw)) continue;
     const v = raw[f.key];
     if (v === undefined) continue;
     if (f.type === "string-list") {
@@ -416,10 +426,11 @@ function SettingsFields({
   errors: Record<string, string>;
   onChange: (key: string, val: SettingVal) => void;
 }) {
-  if (fields.length === 0) return null;
+  const shown = fields.filter((f) => fieldVisible(f, settings));
+  if (shown.length === 0) return null;
   return (
     <div className="grid grid-cols-2 gap-3">
-      {fields.map((f) => (
+      {shown.map((f) => (
         <div key={f.key} className={f.type === "string-list" ? "col-span-2" : ""}>
           <FieldControl f={f} value={settings[f.key]} err={errors[errPrefix + f.key]} onChange={(v) => onChange(f.key, v)} />
         </div>
