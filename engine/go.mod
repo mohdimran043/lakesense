@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.31
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.30
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.61.0
-	github.com/elastic/go-elasticsearch/v8 v8.13.1
+	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/go-mysql-org/go-mysql v1.16.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/gocql/gocql v1.7.0
@@ -50,7 +50,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/elastic/elastic-transport-go/v8 v8.5.0 // indirect
+	github.com/elastic/elastic-transport-go/v8 v8.9.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
